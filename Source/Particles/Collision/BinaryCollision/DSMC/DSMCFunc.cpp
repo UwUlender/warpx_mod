@@ -60,9 +60,22 @@ DSMCFunc::DSMCFunc (
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(process.type() != ScatteringProcessType::INVALID,
                                         "Cannot add an unknown scattering process type");
 
+        // Check if this process produces new species (requires species transformation)
+        // For excitation, only count it if product_species is specified
+        bool is_species_transforming = false;
         if (process.type() == ScatteringProcessType::IONIZATION ||
             process.type() == ScatteringProcessType::TWOPRODUCT_REACTION ||
             process.type() == ScatteringProcessType::DEEXCITATION) {
+            is_species_transforming = true;
+        } else if (process.type() == ScatteringProcessType::EXCITATION) {
+            // Check if product_species is specified for excitation
+            amrex::Vector<std::string> product_species_check;
+            if (pp_collision_name.queryarr("product_species", product_species_check)) {
+                is_species_transforming = true;
+            }
+        }
+
+        if (is_species_transforming) {
             // Only one reaction that produces new species is currently supported
             // as part of a given collision set.
             if (reaction_produces_new_species) {

@@ -19,13 +19,21 @@ SplitAndScatterFunc::SplitAndScatterFunc (const std::string& collision_name,
 
         // Check if the scattering processes include reactions that produce macroparticles in new species
         // (i.e. not in the incident species list), i.e. if it contains ionization, charge exchange,
-        // two-product reaction, or deexcitation
+        // two-product reaction, deexcitation, or excitation (when product_species is specified)
         amrex::Vector<std::string> scattering_processes;
         pp_collision_name.queryarr("scattering_processes", scattering_processes);
-        const bool reaction_produces_new_species = std::any_of(scattering_processes.begin(), scattering_processes.end(), [](const std::string& process) {
-            return process == "ionization" || process == "charge_exchange" || process == "two_product_reaction" ||
-                   process.find("deexcitation") != std::string::npos;
-        });
+
+        // Check if product_species is specified (determines if excitation/deexcitation transforms species)
+        amrex::Vector<std::string> product_species_check;
+        const bool has_product_species = pp_collision_name.queryarr("product_species", product_species_check);
+
+        const bool reaction_produces_new_species = std::any_of(scattering_processes.begin(), scattering_processes.end(),
+            [has_product_species](const std::string& process) {
+                return process == "ionization" || process == "charge_exchange" || process == "two_product_reaction" ||
+                       process.find("deexcitation") != std::string::npos ||
+                       (process.find("excitation") != std::string::npos &&
+                        process.find("deexcitation") == std::string::npos && has_product_species);
+            });
 
         if (reaction_produces_new_species) {
 
@@ -74,6 +82,28 @@ SplitAndScatterFunc::SplitAndScatterFunc (const std::string& collision_name,
                     if (process.find("deexcitation") != std::string::npos) {
                         const std::string kw_energy = process + "_energy";
                         pp_collision_name.get(kw_energy.c_str(), m_deexcitation_energy);
+                        break;
+                    }
+                }
+            }
+
+            // For excitation with species transformation: e + Ar -> e + Ar*
+            // The electron species stays the same but Ar is transformed to Ar*
+            if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
+                           [](const std::string& process) { return process.find("excitation") != std::string::npos &&
+                                                                     process.find("deexcitation") == std::string::npos; }) &&
+                has_product_species) {
+                m_num_product_species = 4;
+                m_num_products_host.push_back(0); // reactant species 1 (electron) is consumed
+                m_num_products_host.push_back(0); // reactant species 2 (ground state) is consumed
+                m_num_products_host.push_back(1); // product species 1 (electron)
+                m_num_products_host.push_back(1); // product species 2 (excited state)
+
+                // Find and get the excitation energy
+                for (const auto& process : scattering_processes) {
+                    if (process.find("excitation") != std::string::npos && process.find("deexcitation") == std::string::npos) {
+                        const std::string kw_energy = process + "_energy";
+                        pp_collision_name.get(kw_energy.c_str(), m_excitation_energy);
                         break;
                     }
                 }
