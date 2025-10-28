@@ -68,15 +68,35 @@ public:
                                  amrex::Real t
                                  );
 
+    /** Perform MCC excitation interactions
+     *
+     * @param[in] lev the mesh-refinement level
+     * @param[in,out] cost pointer to (load balancing) cost corresponding to box where present particles undergo excitation.
+     * @param[in,out] species1 reference to species container for colliding particles (electrons)
+     * @param[in,out] species2 reference to species container for excited neutrals
+     * @param t current time
+     *
+     */
+    void doBackgroundExcitation (
+                                 int lev,
+                                 amrex::LayoutData<amrex::Real>* cost,
+                                 WarpXParticleContainer& species1,
+                                 WarpXParticleContainer& species2,
+                                 amrex::Real t
+                                 );
+
 private:
 
     amrex::Vector<ScatteringProcess> m_scattering_processes;
     amrex::Vector<ScatteringProcess> m_ionization_processes;
+    amrex::Vector<ScatteringProcess> m_excitation_processes;
     amrex::Gpu::DeviceVector<ScatteringProcess::Executor> m_scattering_processes_exe;
     amrex::Gpu::DeviceVector<ScatteringProcess::Executor> m_ionization_processes_exe;
+    amrex::Gpu::DeviceVector<ScatteringProcess::Executor> m_excitation_processes_exe;
 
     bool init_flag = false;
     bool ionization_flag = false;
+    bool excitation_flag = false;
 
     amrex::ParticleReal m_mass1;
 
@@ -84,8 +104,10 @@ private:
     amrex::ParticleReal m_background_mass;
     amrex::ParticleReal m_total_collision_prob;
     amrex::ParticleReal m_total_collision_prob_ioniz = 0;
+    amrex::ParticleReal m_total_collision_prob_excit = 0;
     amrex::ParticleReal m_nu_max;
     amrex::ParticleReal m_nu_max_ioniz;
+    amrex::ParticleReal m_nu_max_excit;
 
     amrex::Parser m_background_density_parser;
     amrex::Parser m_background_temperature_parser;
