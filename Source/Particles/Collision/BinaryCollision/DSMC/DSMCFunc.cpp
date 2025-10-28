@@ -38,12 +38,13 @@ DSMCFunc::DSMCFunc (
         std::string cross_section_file;
         pp_collision_name.query(kw_cross_section.c_str(), cross_section_file);
 
-        // if the scattering process is excitation, ionization, forward or
+        // if the scattering process is excitation, deexcitation, ionization, forward or
         // two-product reaction get the energy associated with that process
         // (note that this allows forward scattering to be used both with and
         // without a fixed energy loss)
         amrex::ParticleReal energy = 0._prt;
         if (scattering_process.find("excitation") != std::string::npos ||
+            scattering_process.find("deexcitation") != std::string::npos ||
             scattering_process.find("ionization") != std::string::npos ||
             scattering_process.find("forward") != std::string::npos ||
             scattering_process.find("two_product_reaction") != std::string::npos ) {
@@ -54,8 +55,6 @@ DSMCFunc::DSMCFunc (
 
         ScatteringProcess process(scattering_process, cross_section_file, energy);
 
-        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(process.type() != ScatteringProcessType::EXCITATION,
-                                        "Excitation collisions are not yet supported in DSMC");
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(process.type() != ScatteringProcessType::FORWARD,
                                         "Forward scattering collisions are not yet supported in DSMC");
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(process.type() != ScatteringProcessType::INVALID,

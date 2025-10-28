@@ -62,6 +62,31 @@ SplitAndScatterFunc::SplitAndScatterFunc (const std::string& collision_name,
             m_num_products_host.push_back(0);
             m_num_products_host.push_back(0);
         }
+
+        // Check for excitation and deexcitation processes and get their energies
+        if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
+                       [](const std::string& process) { return process.find("excitation") != std::string::npos; })) {
+            // Find and store excitation energy (search for any process containing "excitation" but not "deexcitation")
+            for (const auto& process : scattering_processes) {
+                if (process.find("excitation") != std::string::npos && process.find("deexcitation") == std::string::npos) {
+                    const std::string kw_energy = process + "_energy";
+                    pp_collision_name.get(kw_energy.c_str(), m_excitation_energy);
+                    break;
+                }
+            }
+        }
+
+        if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
+                       [](const std::string& process) { return process.find("deexcitation") != std::string::npos; })) {
+            // Find and store deexcitation energy
+            for (const auto& process : scattering_processes) {
+                if (process.find("deexcitation") != std::string::npos) {
+                    const std::string kw_energy = process + "_energy";
+                    pp_collision_name.get(kw_energy.c_str(), m_deexcitation_energy);
+                    break;
+                }
+            }
+        }
     }
     else
     {

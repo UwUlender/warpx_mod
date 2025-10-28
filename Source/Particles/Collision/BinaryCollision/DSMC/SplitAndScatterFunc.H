@@ -168,6 +168,8 @@ public:
 
         const int num_product_species = m_num_product_species;
         const auto reaction_energy = m_reaction_energy;
+        const auto excitation_energy = m_excitation_energy;
+        const auto deexcitation_energy = m_deexcitation_energy;
 
         // Grab the masses of the reaction products
         amrex::ParticleReal mass_product1 = 0;
@@ -258,6 +260,68 @@ public:
                     ux2 *= -1.0_prt;
                     uy2 *= -1.0_prt;
                     uz2 *= -1.0_prt;
+                } else if (mask[i] == int(ScatteringProcessType::EXCITATION)) {
+                    // Excitation: electron loses energy, target gains internal energy
+                    // Calculate the total kinetic energy in COM frame (in eV)
+                    const amrex::ParticleReal E_kin = 0.5_prt * (
+                        m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
+                        m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
+                    ) / PhysConst::q_e;
+
+                    // Subtract excitation energy
+                    const amrex::ParticleReal E_out = (E_kin - excitation_energy) * PhysConst::q_e;
+
+                    // Scale velocities to conserve total energy
+                    if (E_out > 0.0_prt) {
+                        const amrex::ParticleReal scale_factor = std::sqrt(E_out / (
+                            0.5_prt * m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
+                            0.5_prt * m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
+                        ));
+                        ux1 *= scale_factor;
+                        uy1 *= scale_factor;
+                        uz1 *= scale_factor;
+                        ux2 *= scale_factor;
+                        uy2 *= scale_factor;
+                        uz2 *= scale_factor;
+                    }
+
+                    // Randomly scatter particles
+                    ParticleUtils::RandomizeVelocity(
+                        ux1, uy1, uz1, std::sqrt(ux1*ux1 + uy1*uy1 + uz1*uz1), engine
+                    );
+                    ux2 = -ux1 * m1 / m2;
+                    uy2 = -uy1 * m1 / m2;
+                    uz2 = -uz1 * m1 / m2;
+                } else if (mask[i] == int(ScatteringProcessType::DEEXCITATION)) {
+                    // Deexcitation: electron gains energy released from excited state
+                    // Calculate the total kinetic energy in COM frame (in eV)
+                    const amrex::ParticleReal E_kin = 0.5_prt * (
+                        m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
+                        m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
+                    ) / PhysConst::q_e;
+
+                    // Add deexcitation energy
+                    const amrex::ParticleReal E_out = (E_kin + deexcitation_energy) * PhysConst::q_e;
+
+                    // Scale velocities to conserve total energy
+                    const amrex::ParticleReal scale_factor = std::sqrt(E_out / (
+                        0.5_prt * m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
+                        0.5_prt * m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
+                    ));
+                    ux1 *= scale_factor;
+                    uy1 *= scale_factor;
+                    uz1 *= scale_factor;
+                    ux2 *= scale_factor;
+                    uy2 *= scale_factor;
+                    uz2 *= scale_factor;
+
+                    // Randomly scatter particles
+                    ParticleUtils::RandomizeVelocity(
+                        ux1, uy1, uz1, std::sqrt(ux1*ux1 + uy1*uy1 + uz1*uz1), engine
+                    );
+                    ux2 = -ux1 * m1 / m2;
+                    uy2 = -uy1 * m1 / m2;
+                    uz2 = -uz1 * m1 / m2;
                 } else if (mask[i] == int(ScatteringProcessType::FORWARD)) {
                     amrex::Abort("Forward scattering with DSMC not implemented yet.");
                 }
@@ -534,6 +598,10 @@ private:
     int m_num_product_species;
     // If ionization collisions are included, what is the energy cost
     amrex::ParticleReal m_reaction_energy = 0.0;
+    // Energy cost for excitation reactions (energy subtracted from electron)
+    amrex::ParticleReal m_excitation_energy = 0.0;
+    // Energy released in deexcitation reactions (energy added to electron)
+    amrex::ParticleReal m_deexcitation_energy = 0.0;
     // Vectors of size m_num_product_species storing how many particles of a given species are
     // produced by a collision event.
     amrex::Gpu::HostVector<int> m_num_products_host;
