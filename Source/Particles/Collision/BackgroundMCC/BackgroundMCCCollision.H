@@ -16,6 +16,7 @@
 #include <AMReX_Vector.H>
 #include <AMReX_GpuContainers.H>
 
+#include <map>
 #include <memory>
 #include <string>
 
@@ -74,6 +75,7 @@ public:
      * @param[in,out] cost pointer to (load balancing) cost corresponding to box where present particles undergo excitation.
      * @param[in,out] species1 reference to species container for colliding particles (electrons)
      * @param[in,out] species2 reference to species container for excited neutrals
+     * @param[in] excitation_index index of the excitation process in m_excitation_processes
      * @param t current time
      *
      */
@@ -82,6 +84,7 @@ public:
                                  amrex::LayoutData<amrex::Real>* cost,
                                  WarpXParticleContainer& species1,
                                  WarpXParticleContainer& species2,
+                                 int excitation_index,
                                  amrex::Real t
                                  );
 
@@ -94,9 +97,11 @@ private:
     amrex::Gpu::DeviceVector<ScatteringProcess::Executor> m_ionization_processes_exe;
     amrex::Gpu::DeviceVector<ScatteringProcess::Executor> m_excitation_processes_exe;
 
+    // Map excitation process index to species name
+    std::map<int, std::string> m_excitation_species_names;
+
     bool init_flag = false;
     bool ionization_flag = false;
-    bool excitation_flag = false;
 
     amrex::ParticleReal m_mass1;
 
@@ -104,10 +109,10 @@ private:
     amrex::ParticleReal m_background_mass;
     amrex::ParticleReal m_total_collision_prob;
     amrex::ParticleReal m_total_collision_prob_ioniz = 0;
-    amrex::ParticleReal m_total_collision_prob_excit = 0;
+    amrex::Vector<amrex::ParticleReal> m_total_collision_prob_excit;
     amrex::ParticleReal m_nu_max;
     amrex::ParticleReal m_nu_max_ioniz;
-    amrex::ParticleReal m_nu_max_excit;
+    amrex::Vector<amrex::ParticleReal> m_nu_max_excit;
 
     amrex::Parser m_background_density_parser;
     amrex::Parser m_background_temperature_parser;

@@ -133,20 +133,25 @@ BackgroundMCCCollision::BackgroundMCCCollision (std::string const& collision_nam
             ionization_flag = true;
 
             std::string secondary_species;
-            pp_collision_name.get("ionization_species", secondary_species);
+            // Try process-specific species name first, then fall back to generic name
+            const std::string kw_species = scattering_process + "_species";
+            if (!pp_collision_name.query(kw_species.c_str(), secondary_species)) {
+                pp_collision_name.get("ionization_species", secondary_species);
+            }
             m_species_names.push_back(secondary_species);
 
             m_ionization_processes.push_back(std::move(process));
         }
         // if the scattering process is excitation and creates new particles
-        // check for excitation_species parameter to determine if new excited
+        // check for <process_name>_species parameter to determine if new excited
         // neutrals should be created
         else if (process.type() == ScatteringProcessType::EXCITATION) {
             std::string excited_species;
-            if (pp_collision_name.query("excitation_species", excited_species)) {
-                WARPX_ALWAYS_ASSERT_WITH_MESSAGE(!excitation_flag,
-                                                 "Background MCC only supports a single excitation process with particle creation");
-                excitation_flag = true;
+            const std::string kw_species = scattering_process + "_species";
+            if (pp_collision_name.query(kw_species.c_str(), excited_species)) {
+                // excitation with particle creation
+                int excitation_index = static_cast<int>(m_excitation_processes.size());
+                m_excitation_species_names[excitation_index] = excited_species;
                 m_species_names.push_back(excited_species);
                 m_excitation_processes.push_back(std::move(process));
             } else {
@@ -252,14 +257,8 @@ BackgroundMCCCollision::doCollisions (amrex::Real cur_time, amrex::Real dt, Mult
     // this is a very ugly hack to have species2 be a reference and be
     // defined in the scope of doCollisions
     auto& species2 = (
-                      (m_species_names.size() >= 2) ?
+                      (ionization_flag) ?
                       mypc->GetParticleContainerFromName(m_species_names[1]) :
-                      mypc->GetParticleContainerFromName(m_species_names[0])
-                      );
-    // similar hack for species3 (excited neutrals)
-    auto& species3 = (
-                      (m_species_names.size() == 3) ?
-                      mypc->GetParticleContainerFromName(m_species_names[2]) :
                       mypc->GetParticleContainerFromName(m_species_names[0])
                       );
 
@@ -303,29 +302,36 @@ BackgroundMCCCollision::doCollisions (amrex::Real cur_time, amrex::Real dt, Mult
             m_background_mass = species2.getMass();
         }
 
-        if (excitation_flag) {
-            // calculate maximum collision frequency for excitation
-            m_nu_max_excit = get_nu_max(m_excitation_processes);
+        // Handle multiple excitation processes
+        const int num_excitation_processes = static_cast<int>(m_excitation_processes.size());
+        if (num_excitation_processes > 0) {
+            m_nu_max_excit.resize(num_excitation_processes);
+            m_total_collision_prob_excit.resize(num_excitation_processes);
 
-            // calculate total excitation probability
-            auto coll_n_excit = m_nu_max_excit * dt;
-            m_total_collision_prob_excit = 1.0_prt - std::exp(-coll_n_excit);
+            for (int i = 0; i < num_excitation_processes; ++i) {
+                // calculate maximum collision frequency for this excitation process
+                amrex::Vector<ScatteringProcess> single_process = {m_excitation_processes[i]};
+                m_nu_max_excit[i] = get_nu_max(single_process);
 
-            if (coll_n_excit > 0.1_prt) {
-                ablastr::warn_manager::WMRecordWarning("BackgroundMCC Collisions",
-                         "dt is too large to ensure accurate MCC excitation , coll_n_excitation: " +
-                          std::to_string(coll_n_excit) + " is > 0.1 and excitation probability is = " +
-                          std::to_string(m_total_collision_prob_excit) + "\n");
+                // calculate total excitation probability for this process
+                auto coll_n_excit = m_nu_max_excit[i] * dt;
+                m_total_collision_prob_excit[i] = 1.0_prt - std::exp(-coll_n_excit);
+
+                if (coll_n_excit > 0.1_prt) {
+                    ablastr::warn_manager::WMRecordWarning("BackgroundMCC Collisions",
+                             "dt is too large to ensure accurate MCC excitation for process " +
+                              std::to_string(i) + ", coll_n_excitation: " +
+                              std::to_string(coll_n_excit) + " is > 0.1 and excitation probability is = " +
+                              std::to_string(m_total_collision_prob_excit[i]) + "\n");
+                }
             }
 
             // if excitation process is included and background mass not yet set
-            // use the excited neutral species mass as background mass
+            // use the first excited neutral species mass as background mass
             if (m_background_mass == -1) {
-                if (ionization_flag) {
-                    m_background_mass = species3.getMass();
-                } else {
-                    m_background_mass = species2.getMass();
-                }
+                const auto& first_excited_species_name = m_excitation_species_names.at(0);
+                auto& first_excited_species = mypc->GetParticleContainerFromName(first_excited_species_name);
+                m_background_mass = first_excited_species.getMass();
             }
         }
 
@@ -336,15 +342,19 @@ BackgroundMCCCollision::doCollisions (amrex::Real cur_time, amrex::Real dt, Mult
             m_background_mass = species1.getMass();
         }
 
-        amrex::Print() << Utils::TextMsg::Info(
-            "Setting up Monte-Carlo collisions for " + m_species_names[0] + " with:\n"
+        std::string info_msg = "Setting up Monte-Carlo collisions for " + m_species_names[0] + " with:\n"
             + "     total non-ionization collision probability: "
             + std::to_string(m_total_collision_prob)
             + "\n     total ionization collision probability: "
-            + std::to_string(m_total_collision_prob_ioniz)
-            + "\n     total excitation collision probability: "
-            + std::to_string(m_total_collision_prob_excit)
-        );
+            + std::to_string(m_total_collision_prob_ioniz);
+
+        for (int i = 0; i < num_excitation_processes; ++i) {
+            info_msg += "\n     total excitation collision probability (process "
+                      + std::to_string(i) + "): "
+                      + std::to_string(m_total_collision_prob_excit[i]);
+        }
+
+        amrex::Print() << Utils::TextMsg::Info(info_msg);
 
         init_flag = true;
     }
@@ -383,12 +393,11 @@ BackgroundMCCCollision::doCollisions (amrex::Real cur_time, amrex::Real dt, Mult
         }
 
         // thirdly perform excitation through the SmartCopyFactory if needed
-        if (excitation_flag) {
-            if (ionization_flag) {
-                doBackgroundExcitation(lev, cost, species1, species3, cur_time);
-            } else {
-                doBackgroundExcitation(lev, cost, species1, species2, cur_time);
-            }
+        // loop through all excitation processes
+        for (int i = 0; i < static_cast<int>(m_excitation_processes.size()); ++i) {
+            const auto& excited_species_name = m_excitation_species_names.at(i);
+            auto& excited_species = mypc->GetParticleContainerFromName(excited_species_name);
+            doBackgroundExcitation(lev, cost, species1, excited_species, i, cur_time);
         }
     }
 }
@@ -607,7 +616,8 @@ void BackgroundMCCCollision::doBackgroundIonization
 
 void BackgroundMCCCollision::doBackgroundExcitation
 ( int lev, amrex::LayoutData<amrex::Real>* cost,
-  WarpXParticleContainer& species1, WarpXParticleContainer& species2, amrex::Real t)
+  WarpXParticleContainer& species1, WarpXParticleContainer& species2,
+  int excitation_index, amrex::Real t)
 {
     WARPX_PROFILE("BackgroundMCCCollision::doBackgroundExcitation()");
 
@@ -617,9 +627,9 @@ void BackgroundMCCCollision::doBackgroundExcitation
     const auto CopyNeutral = copy_factory_neutral.getSmartCopy();
 
     const auto Filter = ExcitationFilterFunc(
-                                             m_excitation_processes[0],
-                                             m_mass1, m_total_collision_prob_excit,
-                                             m_nu_max_excit, m_background_density_func, t
+                                             m_excitation_processes[excitation_index],
+                                             m_mass1, m_total_collision_prob_excit[excitation_index],
+                                             m_nu_max_excit[excitation_index], m_background_density_func, t
                                              );
 
     const amrex::ParticleReal sqrt_kb_m = std::sqrt(PhysConst::kb / m_background_mass);
@@ -642,7 +652,7 @@ void BackgroundMCCCollision::doBackgroundExcitation
         const auto np_neutral = neutral_tile.numParticles();
 
         auto Transform = ExcitationTransformFunc(
-                                                 m_excitation_processes[0].getEnergyPenalty(),
+                                                 m_excitation_processes[excitation_index].getEnergyPenalty(),
                                                  m_mass1, sqrt_kb_m, m_background_temperature_func, t
                                                  );
 
