@@ -18,11 +18,13 @@ SplitAndScatterFunc::SplitAndScatterFunc (const std::string& collision_name,
         const amrex::ParmParse pp_collision_name(collision_name);
 
         // Check if the scattering processes include reactions that produce macroparticles in new species
-        // (i.e. not in the incident species list), i.e. if it contains ionization, charge exchange or two-product reaction
+        // (i.e. not in the incident species list), i.e. if it contains ionization, charge exchange,
+        // two-product reaction, or deexcitation
         amrex::Vector<std::string> scattering_processes;
         pp_collision_name.queryarr("scattering_processes", scattering_processes);
         const bool reaction_produces_new_species = std::any_of(scattering_processes.begin(), scattering_processes.end(), [](const std::string& process) {
-            return process == "ionization" || process == "charge_exchange" || process == "two_product_reaction";
+            return process == "ionization" || process == "charge_exchange" || process == "two_product_reaction" ||
+                   process.find("deexcitation") != std::string::npos;
         });
 
         if (reaction_produces_new_species) {
@@ -57,33 +59,42 @@ SplitAndScatterFunc::SplitAndScatterFunc (const std::string& collision_name,
                 pp_collision_name.query("two_product_reaction_energy", m_reaction_energy);
             }
 
+            // For deexcitation: e + Ar* -> e + Ar
+            // The electron species stays the same but Ar* is transformed to Ar
+            if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
+                           [](const std::string& process) { return process.find("deexcitation") != std::string::npos; })) {
+                m_num_product_species = 4;
+                m_num_products_host.push_back(0); // reactant species 1 (electron) is consumed
+                m_num_products_host.push_back(0); // reactant species 2 (excited state) is consumed
+                m_num_products_host.push_back(1); // product species 1 (electron)
+                m_num_products_host.push_back(1); // product species 2 (ground state)
+
+                // Find and get the deexcitation energy
+                for (const auto& process : scattering_processes) {
+                    if (process.find("deexcitation") != std::string::npos) {
+                        const std::string kw_energy = process + "_energy";
+                        pp_collision_name.get(kw_energy.c_str(), m_deexcitation_energy);
+                        break;
+                    }
+                }
+            }
+
         } else {
             m_num_product_species = 2;
             m_num_products_host.push_back(0);
             m_num_products_host.push_back(0);
-        }
 
-        // Check for excitation and deexcitation processes and get their energies
-        if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
-                       [](const std::string& process) { return process.find("excitation") != std::string::npos; })) {
-            // Find and store excitation energy (search for any process containing "excitation" but not "deexcitation")
-            for (const auto& process : scattering_processes) {
-                if (process.find("excitation") != std::string::npos && process.find("deexcitation") == std::string::npos) {
-                    const std::string kw_energy = process + "_energy";
-                    pp_collision_name.get(kw_energy.c_str(), m_excitation_energy);
-                    break;
-                }
-            }
-        }
-
-        if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
-                       [](const std::string& process) { return process.find("deexcitation") != std::string::npos; })) {
-            // Find and store deexcitation energy
-            for (const auto& process : scattering_processes) {
-                if (process.find("deexcitation") != std::string::npos) {
-                    const std::string kw_energy = process + "_energy";
-                    pp_collision_name.get(kw_energy.c_str(), m_deexcitation_energy);
-                    break;
+            // Check for excitation processes (without particle creation) and get their energies
+            if (std::any_of(scattering_processes.begin(), scattering_processes.end(),
+                           [](const std::string& process) { return process.find("excitation") != std::string::npos &&
+                                                                     process.find("deexcitation") == std::string::npos; })) {
+                // Find and store excitation energy
+                for (const auto& process : scattering_processes) {
+                    if (process.find("excitation") != std::string::npos && process.find("deexcitation") == std::string::npos) {
+                        const std::string kw_energy = process + "_energy";
+                        pp_collision_name.get(kw_energy.c_str(), m_excitation_energy);
+                        break;
+                    }
                 }
             }
         }

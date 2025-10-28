@@ -85,7 +85,8 @@ public:
             [=] AMREX_GPU_DEVICE (index_type i) -> index_type {
                 return ((mask[i] > 0) &
                         (mask[i] != int(ScatteringProcessType::IONIZATION)) &
-                        (mask[i] != int(ScatteringProcessType::TWOPRODUCT_REACTION))) ? 1 : 0;
+                        (mask[i] != int(ScatteringProcessType::TWOPRODUCT_REACTION)) &
+                        (mask[i] != int(ScatteringProcessType::DEEXCITATION))) ? 1 : 0;
             },
             [=] AMREX_GPU_DEVICE (index_type i, index_type s) { no_product_offsets_data[i] = s; },
             amrex::Scan::Type::exclusive, amrex::Scan::retSum
@@ -112,7 +113,8 @@ public:
         auto const with_product_total = amrex::Scan::PrefixSum<index_type>(n_total_pairs,
             [=] AMREX_GPU_DEVICE (index_type i) -> index_type {
                 return ((mask[i] == int(ScatteringProcessType::IONIZATION)) |
-                        (mask[i] == int(ScatteringProcessType::TWOPRODUCT_REACTION))) ? 1 : 0;
+                        (mask[i] == int(ScatteringProcessType::TWOPRODUCT_REACTION)) |
+                        (mask[i] == int(ScatteringProcessType::DEEXCITATION))) ? 1 : 0;
             },
             [=] AMREX_GPU_DEVICE (index_type i, index_type s) { with_product_offsets_data[i] = s; },
             amrex::Scan::Type::exclusive, amrex::Scan::retSum
@@ -183,7 +185,9 @@ public:
         amrex::ParallelForRNG(n_total_pairs,
         [=] AMREX_GPU_DEVICE (int i, amrex::RandomEngine const& engine) noexcept
         {
-            if ((mask[i] > 0) & (mask[i] != int(ScatteringProcessType::IONIZATION)) & (mask[i] != int(ScatteringProcessType::TWOPRODUCT_REACTION)))
+            if ((mask[i] > 0) & (mask[i] != int(ScatteringProcessType::IONIZATION)) &
+                (mask[i] != int(ScatteringProcessType::TWOPRODUCT_REACTION)) &
+                (mask[i] != int(ScatteringProcessType::DEEXCITATION)))
             {
                 const auto product1_index = products_np_data[0] + no_product_p_offsets[i];
                 // Make a copy of the particle from species 1
@@ -292,36 +296,6 @@ public:
                     ux2 = -ux1 * m1 / m2;
                     uy2 = -uy1 * m1 / m2;
                     uz2 = -uz1 * m1 / m2;
-                } else if (mask[i] == int(ScatteringProcessType::DEEXCITATION)) {
-                    // Deexcitation: electron gains energy released from excited state
-                    // Calculate the total kinetic energy in COM frame (in eV)
-                    const amrex::ParticleReal E_kin = 0.5_prt * (
-                        m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
-                        m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
-                    ) / PhysConst::q_e;
-
-                    // Add deexcitation energy
-                    const amrex::ParticleReal E_out = (E_kin + deexcitation_energy) * PhysConst::q_e;
-
-                    // Scale velocities to conserve total energy
-                    const amrex::ParticleReal scale_factor = std::sqrt(E_out / (
-                        0.5_prt * m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
-                        0.5_prt * m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
-                    ));
-                    ux1 *= scale_factor;
-                    uy1 *= scale_factor;
-                    uz1 *= scale_factor;
-                    ux2 *= scale_factor;
-                    uy2 *= scale_factor;
-                    uz2 *= scale_factor;
-
-                    // Randomly scatter particles
-                    ParticleUtils::RandomizeVelocity(
-                        ux1, uy1, uz1, std::sqrt(ux1*ux1 + uy1*uy1 + uz1*uz1), engine
-                    );
-                    ux2 = -ux1 * m1 / m2;
-                    uy2 = -uy1 * m1 / m2;
-                    uz2 = -uz1 * m1 / m2;
                 } else if (mask[i] == int(ScatteringProcessType::FORWARD)) {
                     amrex::Abort("Forward scattering with DSMC not implemented yet.");
                 }
@@ -384,6 +358,101 @@ public:
                     // no angular scattering: the products' momenta have the same direction
                     // as that of the incident particle, in the center-of-mass frame
                     engine);
+            }
+            else if (mask[i] == int(ScatteringProcessType::DEEXCITATION))
+            {
+                // Deexcitation: e + Ar* -> e + Ar
+                // create a copy of the electron at the product electron species location
+                const auto reactant1_index = static_cast<int>(p_pair_indices_1[i]);
+                const auto product1_index = products_np_data[2] + with_product_p_offsets[i];
+                copy_species1[2](soa_products_data[2], soa_1, reactant1_index,
+                                static_cast<int>(product1_index), engine);
+                // Set the weight of the new electron particle to p_pair_reaction_weight[i]
+                soa_products_data[2].m_rdata[PIdx::w][product1_index] = p_pair_reaction_weight[i];
+
+                // create a copy of the ground state neutral at the location of the excited species
+                const auto reactant2_index = static_cast<int>(p_pair_indices_2[i]);
+                const auto product2_index = products_np_data[3] + with_product_p_offsets[i];
+                copy_species2[3](soa_products_data[3], soa_2, reactant2_index,
+                                static_cast<int>(product2_index), engine);
+                // Set the weight of the new ground state particle to p_pair_reaction_weight[i]
+                soa_products_data[3].m_rdata[PIdx::w][product2_index] = p_pair_reaction_weight[i];
+
+                // Get references to the product particles' velocities
+                auto& ux1 = soa_products_data[2].m_rdata[PIdx::ux][product1_index];
+                auto& uy1 = soa_products_data[2].m_rdata[PIdx::uy][product1_index];
+                auto& uz1 = soa_products_data[2].m_rdata[PIdx::uz][product1_index];
+                auto& ux2 = soa_products_data[3].m_rdata[PIdx::ux][product2_index];
+                auto& uy2 = soa_products_data[3].m_rdata[PIdx::uy][product2_index];
+                auto& uz2 = soa_products_data[3].m_rdata[PIdx::uz][product2_index];
+
+#if (defined WARPX_DIM_RZ)
+                /* In RZ geometry, rotate the momentum for cylindrical symmetry */
+                amrex::ParticleReal const theta = (
+                    soa_products_data[3].m_rdata[PIdx::theta][product2_index]
+                    - soa_products_data[2].m_rdata[PIdx::theta][product1_index]
+                );
+                amrex::ParticleReal const ux1buf = ux1;
+                ux1 = ux1buf*std::cos(theta) - uy1*std::sin(theta);
+                uy1 = ux1buf*std::sin(theta) + uy1*std::cos(theta);
+#endif
+
+                // Calculate center-of-momentum velocity (non-relativistic)
+                auto const uCOM_x = (m1 * ux1 + m2 * ux2) / (m1 + m2);
+                auto const uCOM_y = (m1 * uy1 + m2 * uy2) / (m1 + m2);
+                auto const uCOM_z = (m1 * uz1 + m2 * uz2) / (m1 + m2);
+
+                // Transform to COM frame
+                ux1 -= uCOM_x;
+                uy1 -= uCOM_y;
+                uz1 -= uCOM_z;
+                ux2 -= uCOM_x;
+                uy2 -= uCOM_y;
+                uz2 -= uCOM_z;
+
+                // Calculate the total kinetic energy in COM frame (in eV)
+                const amrex::ParticleReal E_kin = 0.5_prt * (
+                    m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
+                    m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
+                ) / PhysConst::q_e;
+
+                // Add deexcitation energy (energy is released)
+                const amrex::ParticleReal E_out = (E_kin + deexcitation_energy) * PhysConst::q_e;
+
+                // Scale velocities to conserve total energy
+                const amrex::ParticleReal scale_factor = std::sqrt(E_out / (
+                    0.5_prt * m1 * (ux1*ux1 + uy1*uy1 + uz1*uz1) +
+                    0.5_prt * m2 * (ux2*ux2 + uy2*uy2 + uz2*uz2)
+                ));
+                ux1 *= scale_factor;
+                uy1 *= scale_factor;
+                uz1 *= scale_factor;
+                ux2 *= scale_factor;
+                uy2 *= scale_factor;
+                uz2 *= scale_factor;
+
+                // Randomly scatter particles
+                ParticleUtils::RandomizeVelocity(
+                    ux1, uy1, uz1, std::sqrt(ux1*ux1 + uy1*uy1 + uz1*uz1), engine
+                );
+                ux2 = -ux1 * m1 / m2;
+                uy2 = -uy1 * m1 / m2;
+                uz2 = -uz1 * m1 / m2;
+
+                // Transform back to lab frame
+                ux1 += uCOM_x;
+                uy1 += uCOM_y;
+                uz1 += uCOM_z;
+                ux2 += uCOM_x;
+                uy2 += uCOM_y;
+                uz2 += uCOM_z;
+
+#if (defined WARPX_DIM_RZ)
+                /* Undo the earlier velocity rotation. */
+                amrex::ParticleReal const ux1buf_new = ux1;
+                ux1 = ux1buf_new*std::cos(-theta) - uy1*std::sin(-theta);
+                uy1 = ux1buf_new*std::sin(-theta) + uy1*std::cos(-theta);
+#endif
             }
             else if (mask[i] == int(ScatteringProcessType::IONIZATION))
             {
