@@ -45,6 +45,7 @@
 #include <AMReX_GpuQualifiers.H>
 #include <AMReX_LayoutData.H>
 #include <AMReX_MFIter.H>
+#include <AMReX_MultiFab.H>
 #include <AMReX_PODVector.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_Particles.H>
@@ -98,6 +99,9 @@ public:
         }
 
         const CollisionType collision_type = BinaryCollisionUtils::get_collision_type(collision_name, mypc);
+
+        // Store collision type for reaction tracking
+        m_collision_type = collision_type;
 
         m_isSameSpecies = (m_species_names[0] == m_species_names[1]);
 
@@ -166,6 +170,37 @@ public:
     BinaryCollision ( BinaryCollision&& )                  = delete;
     BinaryCollision& operator= ( BinaryCollision&& )       = delete;
 
+    /**
+     * \brief Get the collision type for this binary collision
+     * @return The CollisionType enum value
+     */
+    [[nodiscard]] CollisionType getCollisionType() const { return m_collision_type; }
+
+    /**
+     * \brief Get the reaction counts MultiFab for a specific level
+     * @param[in] lev The refinement level
+     * @return Pointer to the MultiFab containing reaction counts, or nullptr if not initialized
+     */
+    [[nodiscard]] amrex::MultiFab* getReactionCountsAtLevel(int lev) const {
+        if (lev >= 0 && lev < static_cast<int>(m_reaction_counts_per_cell.size())) {
+            return m_reaction_counts_per_cell[lev].get();
+        }
+        return nullptr;
+    }
+
+    /**
+     * \brief Get the total number of reactions across all cells at a specific level
+     * @param[in] lev The refinement level
+     * @return Total number of reactions
+     */
+    [[nodiscard]] long getTotalReactionCountAtLevel(int lev) const {
+        if (lev >= 0 && lev < static_cast<int>(m_reaction_counts_per_cell.size()) &&
+            m_reaction_counts_per_cell[lev]) {
+            return static_cast<long>(m_reaction_counts_per_cell[lev]->sum(0));
+        }
+        return 0;
+    }
+
     /** Perform the collisions
      *
      * @param cur_time Current time
@@ -223,8 +258,32 @@ public:
         amrex::MFItInfo info;
         if (amrex::Gpu::notInLaunchRegion()) { info.EnableTiling(species1.tile_size); }
 
+        // Initialize reaction count MultiFabs if needed (only for reactions that produce particles)
+        const int finest_level = species1.finestLevel();
+        if (m_have_product_species) {
+            // Resize the vector to hold one MultiFab per level
+            if (m_reaction_counts_per_cell.size() != static_cast<size_t>(finest_level + 1)) {
+                m_reaction_counts_per_cell.resize(finest_level + 1);
+            }
+
+            // Initialize MultiFab for each level if not already done
+            for (int lev = 0; lev <= finest_level; ++lev) {
+                if (!m_reaction_counts_per_cell[lev]) {
+                    // Get the BoxArray and DistributionMapping from the species
+                    const amrex::BoxArray& ba = species1.ParticleBoxArray(lev);
+                    const amrex::DistributionMapping& dm = species1.ParticleDistributionMap(lev);
+
+                    // Create MultiFab with 1 component (reaction count), 0 ghost cells
+                    // Using cell-centered indexing
+                    m_reaction_counts_per_cell[lev] = std::make_unique<amrex::MultiFab>(ba, dm, 1, 0);
+                }
+                // Reset counts to zero at the start of each collision call
+                m_reaction_counts_per_cell[lev]->setVal(0.0);
+            }
+        }
+
         // Loop over refinement levels
-        for (int lev = 0; lev <= species1.finestLevel(); ++lev){
+        for (int lev = 0; lev <= finest_level; ++lev){
 
         amrex::LayoutData<amrex::Real>* cost = WarpX::getCosts(lev);
 
@@ -701,6 +760,38 @@ public:
             for (int i = 0; i < n_product_species; i++)
             {
                 setNewParticleIDs(*(tile_products_data[i]), static_cast<int>(products_np[i]), num_added[i]);
+            }
+
+            // Count reactions per cell and store in MultiFab
+            if (have_product_species && lev < static_cast<int>(m_reaction_counts_per_cell.size()) &&
+                m_reaction_counts_per_cell[lev]) {
+                // Get the FArrayBox for this tile
+                amrex::FArrayBox& reaction_counts_fab = (*m_reaction_counts_per_cell[lev])[mfi];
+                amrex::Real* AMREX_RESTRICT reaction_counts_data = reaction_counts_fab.dataPtr();
+
+                // Count reactions per cell by summing up the mask values
+                amrex::ParallelFor( n_cells,
+                    [=] AMREX_GPU_DEVICE (int i_cell) noexcept
+                    {
+                        // Get the range of pairs for this cell
+                        index_type const cell_start_pair = p_pair_offsets[i_cell];
+                        index_type const cell_end_pair = p_pair_offsets[i_cell + 1];
+
+                        // Count how many reactions occurred in this cell
+                        amrex::Long reaction_count = 0;
+                        for (index_type pair_idx = cell_start_pair; pair_idx < cell_end_pair; ++pair_idx) {
+                            if (p_mask[pair_idx]) {
+                                ++reaction_count;
+                            }
+                        }
+
+                        // Add to the MultiFab (atomic add for thread safety)
+                        if (reaction_count > 0) {
+                            amrex::Gpu::Atomic::Add(&reaction_counts_data[i_cell],
+                                                   static_cast<amrex::Real>(reaction_count));
+                        }
+                    }
+                );
             }
 
             if (m_correct_energy_momentum) {
@@ -1285,6 +1376,38 @@ public:
                 setNewParticleIDs(*(tile_products_data[i]), static_cast<int>(products_np[i]), num_added[i]);
             }
 
+            // Count reactions per cell and store in MultiFab
+            if (have_product_species && lev < static_cast<int>(m_reaction_counts_per_cell.size()) &&
+                m_reaction_counts_per_cell[lev]) {
+                // Get the FArrayBox for this tile
+                amrex::FArrayBox& reaction_counts_fab = (*m_reaction_counts_per_cell[lev])[mfi];
+                amrex::Real* AMREX_RESTRICT reaction_counts_data = reaction_counts_fab.dataPtr();
+
+                // Count reactions per cell by summing up the mask values
+                amrex::ParallelFor( n_cells,
+                    [=] AMREX_GPU_DEVICE (int i_cell) noexcept
+                    {
+                        // Get the range of pairs for this cell
+                        index_type const cell_start_pair = p_pair_offsets[i_cell];
+                        index_type const cell_end_pair = p_pair_offsets[i_cell + 1];
+
+                        // Count how many reactions occurred in this cell
+                        amrex::Long reaction_count = 0;
+                        for (index_type pair_idx = cell_start_pair; pair_idx < cell_end_pair; ++pair_idx) {
+                            if (p_mask[pair_idx]) {
+                                ++reaction_count;
+                            }
+                        }
+
+                        // Add to the MultiFab (atomic add for thread safety)
+                        if (reaction_count > 0) {
+                            amrex::Gpu::Atomic::Add(&reaction_counts_data[i_cell],
+                                                   static_cast<amrex::Real>(reaction_count));
+                        }
+                    }
+                );
+            }
+
             if (m_correct_energy_momentum) {
                 // Loop over cells and calculate the change in energy and momentum.
                 amrex::ParticleReal const energy_fraction = m_energy_fraction;
@@ -1481,6 +1604,13 @@ private:
     CollisionFunctor m_binary_collision_functor;
     // functor that creates new particles and initializes their parameters
     CopyTransformFunctor m_copy_transform_functor;
+
+    // Collision type for this binary collision
+    CollisionType m_collision_type;
+
+    // MultiFabs to store reaction counts per cell for each refinement level
+    // One Long value per cell representing the number of reactions in that cell
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> m_reaction_counts_per_cell;
 
 };
 
