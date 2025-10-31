@@ -185,7 +185,7 @@ public:
      * @param[in] lev The refinement level
      * @return Pointer to the MultiFab containing reaction counts, or nullptr if not initialized
      */
-    [[nodiscard]] amrex::MultiFab* getReactionCountsAtLevel(int lev) const {
+    [[nodiscard]] amrex::MultiFab* getReactionCountsAtLevel(int lev) const override {
         if (lev >= 0 && lev < static_cast<int>(m_reaction_counts_per_cell.size())) {
             return m_reaction_counts_per_cell[lev].get();
         }
@@ -219,7 +219,7 @@ public:
      * \brief Get the reaction names/labels
      * @return Vector of reaction names
      */
-    [[nodiscard]] const amrex::Vector<std::string>& getReactionNames() const {
+    [[nodiscard]] const amrex::Vector<std::string>& getReactionNames() const override {
         return m_reaction_names;
     }
 
@@ -236,7 +236,7 @@ public:
      * @param[in] lev The refinement level
      * @return Pointer to the MultiFab containing reaction rates (per unit volume), or nullptr if not initialized
      */
-    [[nodiscard]] amrex::MultiFab* getReactionRatesAtLevel(int lev) const {
+    [[nodiscard]] amrex::MultiFab* getReactionRatesAtLevel(int lev) const override {
         if (lev >= 0 && lev < static_cast<int>(m_reaction_rates_per_cell.size())) {
             return m_reaction_rates_per_cell[lev].get();
         }

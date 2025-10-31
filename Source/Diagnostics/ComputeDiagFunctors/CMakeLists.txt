@@ -9,6 +9,7 @@ foreach(D IN LISTS WarpX_DIMS)
         JFunctor.cpp
         JdispFunctor.cpp
         RhoFunctor.cpp
+        ReactionRateFunctor.cpp
         PartPerCellFunctor.cpp
         PartPerGridFunctor.cpp
         ProcessNumberFunctor.cpp

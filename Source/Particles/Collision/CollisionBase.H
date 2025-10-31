@@ -9,6 +9,7 @@
 
 #include "Particles/MultiParticleContainer_fwd.H"
 
+#include <AMReX_MultiFab.H>
 #include <AMReX_REAL.H>
 #include <AMReX_Vector.H>
 
@@ -32,6 +33,29 @@ public:
     [[nodiscard]] int get_ndt() const {return m_ndt;}
 
     [[nodiscard]] bool use_global_debye_length() const {return m_use_global_debye_length;}
+
+    /**
+     * \brief Get reaction counts MultiFab for a specific level (virtual, overridden by BinaryCollision)
+     * @param[in] lev The refinement level
+     * @return Pointer to MultiFab, or nullptr if not available
+     */
+    [[nodiscard]] virtual amrex::MultiFab* getReactionCountsAtLevel([[maybe_unused]] int lev) const { return nullptr; }
+
+    /**
+     * \brief Get reaction rates MultiFab for a specific level (virtual, overridden by BinaryCollision)
+     * @param[in] lev The refinement level
+     * @return Pointer to MultiFab, or nullptr if not available
+     */
+    [[nodiscard]] virtual amrex::MultiFab* getReactionRatesAtLevel([[maybe_unused]] int lev) const { return nullptr; }
+
+    /**
+     * \brief Get reaction names (virtual, overridden by BinaryCollision)
+     * @return Vector of reaction names
+     */
+    [[nodiscard]] virtual const amrex::Vector<std::string>& getReactionNames() const {
+        static const amrex::Vector<std::string> empty;
+        return empty;
+    }
 
 protected:
 

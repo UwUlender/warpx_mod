@@ -8,6 +8,7 @@ CEXE_sources += EBCoveredFunctor.cpp
 CEXE_sources += JFunctor.cpp
 CEXE_sources += JdispFunctor.cpp
 CEXE_sources += RhoFunctor.cpp
+CEXE_sources += ReactionRateFunctor.cpp
 CEXE_sources += BackTransformFunctor.cpp
 CEXE_sources += BackTransformParticleFunctor.cpp
 CEXE_sources += ParticleReductionFunctor.cpp

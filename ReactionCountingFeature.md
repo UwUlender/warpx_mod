@@ -138,10 +138,105 @@ This feature works with any binary collision that produces particles, including:
 
 ## Integration with Diagnostics
 
-The reaction count MultiFabs can be integrated with WarpX's diagnostic system by:
-1. Adding a diagnostic output that writes the MultiFab to file
-2. Computing derived quantities (reaction rate per volume, fusion power, etc.)
-3. Tracking time evolution of reactions in specific regions
+The reaction rate data is fully integrated with WarpX's field diagnostic system. You can output reaction rates to files just like electric fields, magnetic fields, or particle density.
+
+### Input File Configuration
+
+Add reaction rate fields to your diagnostic output using the `fields_to_plot` parameter:
+
+```ini
+diagnostics.diags_names = diag1
+
+# Output total reaction rates (sum from all collisions)
+diag1.fields_to_plot = Ex Ey Ez Bx By Bz rho reaction_rate
+
+# Output rates for a specific collision
+diag1.fields_to_plot = Ex Ey Ez reaction_rate_mycollision
+
+# Output specific reaction subtype (component 0) for a collision
+diag1.fields_to_plot = reaction_rate_mycollision_0
+
+# Output multiple collision rates
+diag1.fields_to_plot = reaction_rate_fusion reaction_rate_ionization
+
+diag1.intervals = 100
+diag1.diag_type = Full
+```
+
+### Field Name Formats
+
+Three formats are supported for reaction rate diagnostics:
+
+1. **`reaction_rate`** - Total reaction rates summed across ALL collisions and all reaction subtypes
+   - Units: reactions per unit volume per unit time
+   - Sums all components from all collisions
+
+2. **`reaction_rate_<collision_name>`** - Rates for a specific collision, summed across all subtypes
+   - Example: `reaction_rate_my_dt_fusion`
+   - Sums all components for the named collision
+
+3. **`reaction_rate_<collision_name>_<component>`** - Rate for a specific reaction subtype
+   - Example: `reaction_rate_dsmc_collisions_0` for component 0
+   - Example: `reaction_rate_dsmc_collisions_2` for component 2
+   - Outputs only the specified component
+
+### Example Configuration
+
+```ini
+# Define collisions
+collisions.collision_names = dt_fusion ar_ionization
+
+dt_fusion.type = nuclearfusion
+dt_fusion.species = deuterium tritium
+dt_fusion.product_species = neutron helium4
+
+ar_ionization.type = dsmc
+ar_ionization.species = electrons argon
+ar_ionization.scattering_processes = elastic ionization1 ionization2
+ar_ionization.product_species = electrons ions
+
+# Define diagnostics
+diagnostics.diags_names = full_diag
+
+full_diag.intervals = 50
+full_diag.diag_type = Full
+full_diag.fields_to_plot = Ex Ey Ez rho reaction_rate reaction_rate_dt_fusion reaction_rate_ar_ionization
+full_diag.format = plotfile
+```
+
+This will output:
+- `reaction_rate`: Total rates from dt_fusion + ar_ionization (all components)
+- `reaction_rate_dt_fusion`: Rates from D-T fusion only
+- `reaction_rate_ar_ionization`: Total rates from DSMC (elastic + ionization1 + ionization2)
+
+### Output Files
+
+The reaction rate data will be written to the same output files as other field data:
+- **Plotfile format**: `plt<step>/` directories with `reaction_rate` field
+- **Checkpoint format**: Included in checkpoint files
+- **OpenPMD format**: Saved with other field data in HDF5/ADIOS files
+
+### Post-Processing
+
+The output reaction rate fields can be analyzed using standard AMReX/WarpX visualization tools:
+
+**VisIt**: Load plotfiles and visualize `reaction_rate` as 2D/3D pseudocolor plots
+
+**yt**:
+```python
+import yt
+ds = yt.load('plt00100')
+ad = ds.all_data()
+reaction_rates = ad['reaction_rate']
+```
+
+**Python (using AMReX)**:
+```python
+import amrex
+plotfile = 'plt00100'
+ds, data = amrex.read_plotfile(plotfile)
+reaction_rate_field = data['reaction_rate']
+```
 
 ## Future Enhancements
 
