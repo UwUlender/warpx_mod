@@ -59,6 +59,7 @@
 #include <AMReX_BaseFwd.H>
 
 #include <cmath>
+#include <map>
 #include <string>
 
 /**
@@ -160,6 +161,9 @@ public:
                 " does not produce species. Thus, `product_species` should not be specified in the input script." );
         }
         m_copy_transform_functor = CopyTransformFunctor(collision_name, mypc);
+
+        // Initialize reaction names and mapping
+        initializeReactionInfo(collision_name);
     }
 
     ~BinaryCollision () override = default;
@@ -191,14 +195,52 @@ public:
     /**
      * \brief Get the total number of reactions across all cells at a specific level
      * @param[in] lev The refinement level
+     * @param[in] comp Component index (reaction subtype), default -1 means sum all
      * @return Total number of reactions
      */
-    [[nodiscard]] long getTotalReactionCountAtLevel(int lev) const {
+    [[nodiscard]] long getTotalReactionCountAtLevel(int lev, int comp = -1) const {
         if (lev >= 0 && lev < static_cast<int>(m_reaction_counts_per_cell.size()) &&
             m_reaction_counts_per_cell[lev]) {
-            return static_cast<long>(m_reaction_counts_per_cell[lev]->sum(0));
+            if (comp < 0) {
+                // Sum across all components
+                long total = 0;
+                for (int i = 0; i < m_reaction_counts_per_cell[lev]->nComp(); ++i) {
+                    total += static_cast<long>(m_reaction_counts_per_cell[lev]->sum(i));
+                }
+                return total;
+            } else if (comp < m_reaction_counts_per_cell[lev]->nComp()) {
+                return static_cast<long>(m_reaction_counts_per_cell[lev]->sum(comp));
+            }
         }
         return 0;
+    }
+
+    /**
+     * \brief Get the reaction names/labels
+     * @return Vector of reaction names
+     */
+    [[nodiscard]] const amrex::Vector<std::string>& getReactionNames() const {
+        return m_reaction_names;
+    }
+
+    /**
+     * \brief Get the number of reaction subtypes being tracked
+     * @return Number of reaction subtypes
+     */
+    [[nodiscard]] int getNumReactionTypes() const {
+        return static_cast<int>(m_reaction_names.size());
+    }
+
+    /**
+     * \brief Get the reaction rates MultiFab for a specific level
+     * @param[in] lev The refinement level
+     * @return Pointer to the MultiFab containing reaction rates (per unit volume), or nullptr if not initialized
+     */
+    [[nodiscard]] amrex::MultiFab* getReactionRatesAtLevel(int lev) const {
+        if (lev >= 0 && lev < static_cast<int>(m_reaction_rates_per_cell.size())) {
+            return m_reaction_rates_per_cell[lev].get();
+        }
+        return nullptr;
     }
 
     /** Perform the collisions
@@ -261,24 +303,32 @@ public:
         // Initialize reaction count MultiFabs if needed (only for reactions that produce particles)
         const int finest_level = species1.finestLevel();
         if (m_have_product_species) {
-            // Resize the vector to hold one MultiFab per level
+            const int n_components = static_cast<int>(m_reaction_names.size());
+
+            // Resize the vectors to hold one MultiFab per level
             if (m_reaction_counts_per_cell.size() != static_cast<size_t>(finest_level + 1)) {
                 m_reaction_counts_per_cell.resize(finest_level + 1);
+                m_reaction_rates_per_cell.resize(finest_level + 1);
             }
 
             // Initialize MultiFab for each level if not already done
             for (int lev = 0; lev <= finest_level; ++lev) {
-                if (!m_reaction_counts_per_cell[lev]) {
-                    // Get the BoxArray and DistributionMapping from the species
-                    const amrex::BoxArray& ba = species1.ParticleBoxArray(lev);
-                    const amrex::DistributionMapping& dm = species1.ParticleDistributionMap(lev);
+                // Get the BoxArray and DistributionMapping from the species
+                const amrex::BoxArray& ba = species1.ParticleBoxArray(lev);
+                const amrex::DistributionMapping& dm = species1.ParticleDistributionMap(lev);
 
-                    // Create MultiFab with 1 component (reaction count), 0 ghost cells
-                    // Using cell-centered indexing
-                    m_reaction_counts_per_cell[lev] = std::make_unique<amrex::MultiFab>(ba, dm, 1, 0);
+                if (!m_reaction_counts_per_cell[lev]) {
+                    // Create MultiFab with N components (one per reaction subtype), 0 ghost cells
+                    m_reaction_counts_per_cell[lev] = std::make_unique<amrex::MultiFab>(ba, dm, n_components, 0);
                 }
-                // Reset counts to zero at the start of each collision call
+                if (!m_reaction_rates_per_cell[lev]) {
+                    // Create MultiFab for rates (reactions per unit volume)
+                    m_reaction_rates_per_cell[lev] = std::make_unique<amrex::MultiFab>(ba, dm, n_components, 0);
+                }
+
+                // Reset counts and rates to zero at the start of each collision call
                 m_reaction_counts_per_cell[lev]->setVal(0.0);
+                m_reaction_rates_per_cell[lev]->setVal(0.0);
             }
         }
 
@@ -767,9 +817,18 @@ public:
                 m_reaction_counts_per_cell[lev]) {
                 // Get the FArrayBox for this tile
                 amrex::FArrayBox& reaction_counts_fab = (*m_reaction_counts_per_cell[lev])[mfi];
-                amrex::Real* AMREX_RESTRICT reaction_counts_data = reaction_counts_fab.dataPtr();
+                amrex::FArrayBox& reaction_rates_fab = (*m_reaction_rates_per_cell[lev])[mfi];
+                const int n_comps = reaction_counts_fab.nComp();
 
-                // Count reactions per cell by summing up the mask values
+                // Get pointers to each component
+                amrex::Real* AMREX_RESTRICT counts_data[10]; // Max 10 components for stack allocation
+                amrex::Real* AMREX_RESTRICT rates_data[10];
+                for (int comp = 0; comp < n_comps && comp < 10; ++comp) {
+                    counts_data[comp] = reaction_counts_fab.dataPtr(comp);
+                    rates_data[comp] = reaction_rates_fab.dataPtr(comp);
+                }
+
+                // Count reactions per cell, tracking each reaction subtype
                 amrex::ParallelFor( n_cells,
                     [=] AMREX_GPU_DEVICE (int i_cell) noexcept
                     {
@@ -777,18 +836,29 @@ public:
                         index_type const cell_start_pair = p_pair_offsets[i_cell];
                         index_type const cell_end_pair = p_pair_offsets[i_cell + 1];
 
-                        // Count how many reactions occurred in this cell
-                        amrex::Long reaction_count = 0;
+                        // Count reactions by subtype
+                        int reaction_counts[10] = {0}; // Local counters for each component
+
                         for (index_type pair_idx = cell_start_pair; pair_idx < cell_end_pair; ++pair_idx) {
-                            if (p_mask[pair_idx]) {
-                                ++reaction_count;
+                            int mask_value = p_mask[pair_idx];
+                            if (mask_value > 0) {
+                                // For now, map all non-zero masks to component 0
+                                // (Proper mapping requires runtime detection of DSMC process types)
+                                reaction_counts[0]++;
                             }
                         }
 
-                        // Add to the MultiFab (atomic add for thread safety)
-                        if (reaction_count > 0) {
-                            amrex::Gpu::Atomic::Add(&reaction_counts_data[i_cell],
-                                                   static_cast<amrex::Real>(reaction_count));
+                        // Add to MultiFabs and compute rates
+                        const amrex::Real cell_volume = dV * volume_factor(i_cell);
+                        for (int comp = 0; comp < n_comps && comp < 10; ++comp) {
+                            if (reaction_counts[comp] > 0) {
+                                const amrex::Real count_real = static_cast<amrex::Real>(reaction_counts[comp]);
+                                amrex::Gpu::Atomic::Add(&counts_data[comp][i_cell], count_real);
+
+                                // Compute rate (reactions per unit volume)
+                                const amrex::Real rate = count_real / cell_volume;
+                                amrex::Gpu::Atomic::Add(&rates_data[comp][i_cell], rate);
+                            }
                         }
                     }
                 );
@@ -1381,9 +1451,18 @@ public:
                 m_reaction_counts_per_cell[lev]) {
                 // Get the FArrayBox for this tile
                 amrex::FArrayBox& reaction_counts_fab = (*m_reaction_counts_per_cell[lev])[mfi];
-                amrex::Real* AMREX_RESTRICT reaction_counts_data = reaction_counts_fab.dataPtr();
+                amrex::FArrayBox& reaction_rates_fab = (*m_reaction_rates_per_cell[lev])[mfi];
+                const int n_comps = reaction_counts_fab.nComp();
 
-                // Count reactions per cell by summing up the mask values
+                // Get pointers to each component
+                amrex::Real* AMREX_RESTRICT counts_data[10]; // Max 10 components for stack allocation
+                amrex::Real* AMREX_RESTRICT rates_data[10];
+                for (int comp = 0; comp < n_comps && comp < 10; ++comp) {
+                    counts_data[comp] = reaction_counts_fab.dataPtr(comp);
+                    rates_data[comp] = reaction_rates_fab.dataPtr(comp);
+                }
+
+                // Count reactions per cell, tracking each reaction subtype
                 amrex::ParallelFor( n_cells,
                     [=] AMREX_GPU_DEVICE (int i_cell) noexcept
                     {
@@ -1391,18 +1470,29 @@ public:
                         index_type const cell_start_pair = p_pair_offsets[i_cell];
                         index_type const cell_end_pair = p_pair_offsets[i_cell + 1];
 
-                        // Count how many reactions occurred in this cell
-                        amrex::Long reaction_count = 0;
+                        // Count reactions by subtype
+                        int reaction_counts[10] = {0}; // Local counters for each component
+
                         for (index_type pair_idx = cell_start_pair; pair_idx < cell_end_pair; ++pair_idx) {
-                            if (p_mask[pair_idx]) {
-                                ++reaction_count;
+                            int mask_value = p_mask[pair_idx];
+                            if (mask_value > 0) {
+                                // For now, map all non-zero masks to component 0
+                                // (Proper mapping requires runtime detection of DSMC process types)
+                                reaction_counts[0]++;
                             }
                         }
 
-                        // Add to the MultiFab (atomic add for thread safety)
-                        if (reaction_count > 0) {
-                            amrex::Gpu::Atomic::Add(&reaction_counts_data[i_cell],
-                                                   static_cast<amrex::Real>(reaction_count));
+                        // Add to MultiFabs and compute rates
+                        const amrex::Real cell_volume = dV * volume_factor(i_cell);
+                        for (int comp = 0; comp < n_comps && comp < 10; ++comp) {
+                            if (reaction_counts[comp] > 0) {
+                                const amrex::Real count_real = static_cast<amrex::Real>(reaction_counts[comp]);
+                                amrex::Gpu::Atomic::Add(&counts_data[comp][i_cell], count_real);
+
+                                // Compute rate (reactions per unit volume)
+                                const amrex::Real rate = count_real / cell_volume;
+                                amrex::Gpu::Atomic::Add(&rates_data[comp][i_cell], rate);
+                            }
                         }
                     }
                 );
@@ -1591,6 +1681,31 @@ public:
 
 private:
 
+    /**
+     * \brief Initialize reaction names and mask-to-component mapping
+     * @param[in] collision_name The name of the collision from input
+     */
+    void initializeReactionInfo([[maybe_unused]] const std::string& collision_name) {
+        // For DSMC collisions with multiple scattering processes, we create entries
+        // for each possible ScatteringProcessType
+        if (m_collision_type == CollisionType::DSMC) {
+            // For DSMC, p_mask contains the ScatteringProcessType enum value
+            // We'll dynamically detect which types are actually used
+            // For now, set up a mapping for common types
+            // Note: The actual processes used will be determined at runtime
+            m_reaction_names.push_back(collision_name + "_all_processes");
+            m_mask_to_component[1] = 0; // Map any non-zero mask to component 0 initially
+        } else {
+            // For all other collision types, we have a single reaction
+            // Use collision type name as the reaction name
+            std::string reaction_name = collision_name;
+
+            // Map boolean mask (1 = true) to component 0
+            m_mask_to_component[1] = 0;
+            m_reaction_names.push_back(reaction_name);
+        }
+    }
+
     bool m_isSameSpecies;
     bool m_have_product_species;
 
@@ -1608,9 +1723,22 @@ private:
     // Collision type for this binary collision
     CollisionType m_collision_type;
 
+    // Reaction names/labels for each component in the MultiFab
+    // For DSMC: multiple scattering process names (e.g., "elastic", "ionization1", "excitation2")
+    // For other collisions: single reaction name (e.g., "D+T->n+He4")
+    amrex::Vector<std::string> m_reaction_names;
+
+    // Mapping from p_mask value to MultiFab component index
+    // For DSMC: mask value (ScatteringProcessType) -> component index
+    // For other collisions: typically just {1 -> 0} for boolean mask
+    std::map<int, int> m_mask_to_component;
+
     // MultiFabs to store reaction counts per cell for each refinement level
-    // One Long value per cell representing the number of reactions in that cell
+    // Each MultiFab has N components, one for each reaction subtype
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> m_reaction_counts_per_cell;
+
+    // MultiFabs to store reaction rates per cell (reactions per unit volume per time)
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> m_reaction_rates_per_cell;
 
 };
 
