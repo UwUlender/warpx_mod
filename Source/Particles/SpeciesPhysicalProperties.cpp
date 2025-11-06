@@ -73,6 +73,7 @@ namespace {
         {"copper"     , PhysicalSpecies::copper},
         {"xenon"      , PhysicalSpecies::xenon},
         {"gold"       , PhysicalSpecies::gold},
+        {"dust"       , PhysicalSpecies::dust},
     };
 
     const auto species_to_string = std::map<PhysicalSpecies, std::string>{
@@ -121,7 +122,8 @@ namespace {
         {PhysicalSpecies::argon      , "argon"},
         {PhysicalSpecies::copper     , "copper"},
         {PhysicalSpecies::xenon      , "xenon"},
-        {PhysicalSpecies::gold       , "gold"}
+        {PhysicalSpecies::gold       , "gold"},
+        {PhysicalSpecies::dust       , "dust"}
     };
 
     constexpr auto quiet_NaN = std::numeric_limits<amrex::Real>::quiet_NaN();
@@ -270,6 +272,9 @@ namespace {
         {PhysicalSpecies::gold, Properties{
              amrex::Real(196.966569) * PhysConst::m_u,
              amrex::Real(79) * PhysConst::q_e}},
+        {PhysicalSpecies::dust, Properties{
+             amrex::Real(1.0e9) * PhysConst::m_u,  // Default: ~1e-15 kg (1 micron silica)
+             amrex::Real(0.0)}},                    // Default: initially neutral, will be updated dynamically
     };
 }
 
