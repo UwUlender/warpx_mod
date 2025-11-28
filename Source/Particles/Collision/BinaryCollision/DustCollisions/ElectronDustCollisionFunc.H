@@ -119,13 +119,13 @@ public:
             index_type const I2s, index_type const I2e,
             index_type const* AMREX_RESTRICT I1,
             index_type const* AMREX_RESTRICT I2,
-            SoaData_type& soa_1, SoaData_type& soa_2,
+            SoaData_type soa_1, SoaData_type soa_2,
             GetParticlePosition<PIdx> /*get_position_1*/, GetParticlePosition<PIdx> /*get_position_2*/,
             amrex::ParticleReal const  /*n1*/, amrex::ParticleReal const  /*n2*/,
-            amrex::ParticleReal const  T1, amrex::ParticleReal const  /*T2*/,
+            amrex::ParticleReal const  /*T1*/, amrex::ParticleReal const  /*T2*/,
             amrex::Real const /*global_lamdb*/,
-            amrex::ParticleReal const  q1, amrex::ParticleReal const  /*q2*/,
-            amrex::ParticleReal const  m1, amrex::ParticleReal const  m2,
+            amrex::ParticleReal const  /*q1*/, amrex::ParticleReal const  /*q2*/,
+            amrex::ParticleReal const  m1, amrex::ParticleReal const  /*m2*/,
             amrex::Real const  dt, amrex::Real const dV, index_type /*coll_idx*/,
             index_type const /*cell_start_pair*/, index_type* /*p_mask*/,
             index_type* /*p_pair_indices_1*/, index_type* /*p_pair_indices_2*/,
@@ -156,9 +156,8 @@ public:
             }
 
             // Constants
-            constexpr amrex::ParticleReal epsilon_0 = PhysConst::ep0;
+            constexpr amrex::ParticleReal epsilon_0 = PhysConst::epsilon_0;
             constexpr amrex::ParticleReal e = PhysConst::q_e;
-            constexpr amrex::ParticleReal c = PhysConst::c;
             const amrex::ParticleReal a = m_dust_radius;
             const amrex::ParticleReal sigma_geometric = MathConst::pi * a * a;
 
@@ -268,6 +267,8 @@ public:
     };
 
     [[nodiscard]] Executor const& executor () const { return m_exe; }
+
+    bool use_global_debye_length() { return false; }
 
 private:
     amrex::ParticleReal m_dust_radius;
