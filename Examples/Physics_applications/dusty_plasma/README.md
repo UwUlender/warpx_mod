@@ -67,7 +67,9 @@ The input file `inputs_dusty_plasma_3d` contains:
    particles.species_names = electrons ions dust
 
    dust.species_type = dust
-   dust.addRealComp = dust_charge dust_radius
+   dust.addRealAttributes = dust_charge dust_radius
+   dust.attribute.dust_charge(x,y,z,ux,uy,uz,t) = 0.0
+   dust.attribute.dust_radius(x,y,z,ux,uy,uz,t) = 1.0e-6
    ```
 
 2. **Collision setup**:

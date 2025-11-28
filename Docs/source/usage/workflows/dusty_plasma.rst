@@ -85,9 +85,9 @@ Dust particles are defined as a special species type with additional attributes:
    dust.charge = 0.0     # initially neutral
 
    # Add runtime attributes for dust
-   dust.addRealComp = dust_charge dust_radius
-   dust.attribute.dust_charge(x,y,z,t) = 0.0
-   dust.attribute.dust_radius(x,y,z,t) = 1.0e-6  # 1 micron
+   dust.addRealAttributes = dust_charge dust_radius
+   dust.attribute.dust_charge(x,y,z,ux,uy,uz,t) = 0.0
+   dust.attribute.dust_radius(x,y,z,ux,uy,uz,t) = 1.0e-6  # 1 micron
 
 Collision Types
 ^^^^^^^^^^^^^^^
@@ -135,8 +135,8 @@ Dust Species Parameters
 * ``dust.charge`` (``float``, Coulombs)
     Initial charge (typically 0, will evolve dynamically)
 
-* ``dust.addRealComp`` (``string list``)
-    Runtime attributes: ``dust_charge`` (in units of e) and ``dust_radius`` (in meters)
+* ``dust.addRealAttributes`` (``string list``)
+    Runtime attributes: ``dust_charge`` (in units of e) and ``dust_radius`` (in meters). Attribute functions must use signature ``(x,y,z,ux,uy,uz,t)``
 
 Collision Parameters
 """"""""""""""""""""
@@ -193,7 +193,9 @@ This example simulates dust particles in a low-pressure RF discharge:
    dust.species_type = dust
    dust.density = 1.0e10       # fewer dust particles
    dust.mass = 8.38e-15        # 1 micron silica
-   dust.addRealComp = dust_charge dust_radius
+   dust.addRealAttributes = dust_charge dust_radius
+   dust.attribute.dust_charge(x,y,z,ux,uy,uz,t) = 0.0
+   dust.attribute.dust_radius(x,y,z,ux,uy,uz,t) = 1.0e-6
 
    # Collisions
    collisions.collision_names = e_dust i_dust
