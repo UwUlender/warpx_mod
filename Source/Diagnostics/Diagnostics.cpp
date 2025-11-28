@@ -286,14 +286,25 @@ Diagnostics::BaseReadParameters ()
                     // rho for this species
                     m_rho_per_species_index.push_back(i);
                     species_name_is_wrong = false;
+                    break; // Found the species, no need to continue
                 }
             }
             // If species name was misspelled, abort with error message
-            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-                !species_name_is_wrong,
-                "Input error: string " + var + " in " + m_diag_name
-                + ".fields_to_plot does not match any species"
-            );
+            if (species_name_is_wrong) {
+                std::string available_species = "Available species: ";
+                for (int i = 0; i < int(m_all_species_names.size()); i++) {
+                    available_species += m_all_species_names[i];
+                    if (i < int(m_all_species_names.size()) - 1) {
+                        available_species += ", ";
+                    }
+                }
+                WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                    false,
+                    "Input error: string '" + var + "' in " + m_diag_name
+                    + ".fields_to_plot does not match any species. "
+                    + available_species
+                );
+            }
         }
         // Check if m_varnames contains a string of the form T_<species_name>
         if (var.rfind("T_", 0) == 0) {
@@ -310,14 +321,25 @@ Diagnostics::BaseReadParameters ()
                     // T for this species
                     m_T_per_species_index.push_back(i);
                     species_name_is_wrong = false;
+                    break; // Found the species, no need to continue
                 }
             }
             // If species name was misspelled, abort with error message
-            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-                !species_name_is_wrong,
-                "Input error: string " + var + " in " + m_diag_name
-                + ".fields_to_plot does not match any species"
-            );
+            if (species_name_is_wrong) {
+                std::string available_species = "Available species: ";
+                for (int i = 0; i < int(m_all_species_names.size()); i++) {
+                    available_species += m_all_species_names[i];
+                    if (i < int(m_all_species_names.size()) - 1) {
+                        available_species += ", ";
+                    }
+                }
+                WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                    false,
+                    "Input error: string '" + var + "' in " + m_diag_name
+                    + ".fields_to_plot does not match any species. "
+                    + available_species
+                );
+            }
         }
 
         // Check if m_varnames contains a string of the form T_<species_name>
@@ -332,14 +354,25 @@ Diagnostics::BaseReadParameters ()
                 // matches any of the species in the simulation
                 if (species == m_all_species_names[i]) {
                     species_name_is_wrong = false;
+                    break; // Found the species, no need to continue
                 }
             }
             // If species name was misspelled, abort with error message
-            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-                !species_name_is_wrong,
-                "Input error: string " + var + " in " + m_diag_name
-                + ".fields_to_plot does not match any species"
-            );
+            if (species_name_is_wrong) {
+                std::string available_species = "Available species: ";
+                for (int i = 0; i < int(m_all_species_names.size()); i++) {
+                    available_species += m_all_species_names[i];
+                    if (i < int(m_all_species_names.size()) - 1) {
+                        available_species += ", ";
+                    }
+                }
+                WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                    false,
+                    "Input error: string '" + var + "' in " + m_diag_name
+                    + ".fields_to_plot does not match any species. "
+                    + available_species
+                );
+            }
         }
     }
 
