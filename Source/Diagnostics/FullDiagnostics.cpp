@@ -13,6 +13,7 @@
 #include "ComputeDiagFunctors/ProcessNumberFunctor.H"
 #include "ComputeDiagFunctors/TemperatureFunctor.H"
 #include "ComputeDiagFunctors/RhoFunctor.H"
+#include "ComputeDiagFunctors/ReactionRateFunctor.H"
 #include "Diagnostics/Diagnostics.H"
 #include "Diagnostics/ParticleDiag/ParticleDiag.H"
 #include "Fields.H"
@@ -892,6 +893,32 @@ FullDiagnostics::InitializeFieldFunctors (int lev)
             // Initialize temperature functor to dump temperature per species
             m_all_field_functors[lev][comp] = std::make_unique<TemperatureFunctor>(lev, m_crse_ratio, m_T_per_species_index[i_T_species]);
             i_T_species++;
+        } else if ( m_varnames[comp] == "reaction_rate" ){
+            // Initialize reaction rate functor to dump total reaction rates (sum all collisions)
+            m_all_field_functors[lev][comp] = std::make_unique<ReactionRateFunctor>(lev, m_crse_ratio);
+        } else if ( m_varnames[comp].rfind("reaction_rate_", 0) == 0 ){
+            // Initialize reaction rate functor to dump rates for a specific collision
+            // Format: "reaction_rate_<collision_name>" or "reaction_rate_<collision_name>_<component>"
+            std::string name_part = m_varnames[comp].substr(14); // Remove "reaction_rate_" prefix
+
+            // Check if there's a component specification
+            size_t last_underscore = name_part.rfind('_');
+            std::string collision_name = name_part;
+            int reaction_component = -1; // -1 means sum all components
+
+            // Try to parse component index if present
+            if (last_underscore != std::string::npos) {
+                std::string comp_str = name_part.substr(last_underscore + 1);
+                try {
+                    reaction_component = std::stoi(comp_str);
+                    collision_name = name_part.substr(0, last_underscore);
+                } catch (...) {
+                    // Not a number, treat whole string as collision name
+                }
+            }
+
+            m_all_field_functors[lev][comp] = std::make_unique<ReactionRateFunctor>(
+                lev, m_crse_ratio, collision_name, reaction_component);
         } else if ( m_varnames[comp] == "F" ){
             m_all_field_functors[lev][comp] = std::make_unique<CellCenterFunctor>(warpx.m_fields.get(FieldType::F_fp, lev), lev, m_crse_ratio);
         } else if ( m_varnames[comp] == "G" ){
