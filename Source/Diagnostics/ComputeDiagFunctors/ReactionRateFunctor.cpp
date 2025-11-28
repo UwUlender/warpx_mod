@@ -38,33 +38,39 @@ ReactionRateFunctor::operator() (amrex::MultiFab& mf_dst, int dcomp, int /*i_buf
         return;
     }
 
-    // Initialize output to zero
-    mf_dst.setVal(0.0, dcomp, nComp(), 0);
+    // Create a temporary MultiFab with the simulation grid structure at this level
+    // We'll accumulate reaction rates here, then interpolate to the diagnostic grid
+    const amrex::BoxArray& ba = mypc.ParticleBoxArray(m_lev);
+    const amrex::DistributionMapping& dm = mypc.ParticleDistributionMap(m_lev);
+    std::unique_ptr<amrex::MultiFab> rates_tmp = std::make_unique<amrex::MultiFab>(ba, dm, 1, 0);
+    rates_tmp->setVal(0.0);
 
     if (!m_collision_name.empty()) {
         // Output rates for a specific collision
         CollisionBase* collision = mypc.collisionhandler->getCollisionByName(m_collision_name);
         if (!collision) {
-            // Collision not found, output remains zero
+            // Collision not found, interpolate zeros
+            InterpolateMFForDiag(mf_dst, *rates_tmp, dcomp, dm, m_convertRZmodes2cartesian);
             return;
         }
 
         amrex::MultiFab* rates_mf = collision->getReactionRatesAtLevel(m_lev);
         if (!rates_mf) {
             // No reaction rate data for this collision at this level
+            InterpolateMFForDiag(mf_dst, *rates_tmp, dcomp, dm, m_convertRZmodes2cartesian);
             return;
         }
 
-        // Copy data from the collision's MultiFab to output
+        // Copy/sum data from the collision's MultiFab to temporary MultiFab
         if (m_reaction_component >= 0) {
             // Copy specific component
             if (m_reaction_component < rates_mf->nComp()) {
-                amrex::MultiFab::Copy(mf_dst, *rates_mf, m_reaction_component, dcomp, 1, 0);
+                amrex::MultiFab::Copy(*rates_tmp, *rates_mf, m_reaction_component, 0, 1, 0);
             }
         } else {
             // Sum all components
             for (int comp = 0; comp < rates_mf->nComp(); ++comp) {
-                amrex::MultiFab::Add(mf_dst, *rates_mf, comp, dcomp, 1, 0);
+                amrex::MultiFab::Add(*rates_tmp, *rates_mf, comp, 0, 1, 0);
             }
         }
     } else {
@@ -79,12 +85,11 @@ ReactionRateFunctor::operator() (amrex::MultiFab& mf_dst, int dcomp, int /*i_buf
 
             // Sum all components from this collision
             for (int comp = 0; comp < rates_mf->nComp(); ++comp) {
-                amrex::MultiFab::Add(mf_dst, *rates_mf, comp, dcomp, 1, 0);
+                amrex::MultiFab::Add(*rates_tmp, *rates_mf, comp, 0, 1, 0);
             }
         }
     }
 
-    // Apply coarsening if needed (for compatibility with other functors)
-    // Note: For now, we assume reaction rate data is already on the diagnostic level
-    // If interpolation is needed, it can be added here similar to RhoFunctor
+    // Interpolate from simulation grid to diagnostic grid
+    InterpolateMFForDiag(mf_dst, *rates_tmp, dcomp, dm, m_convertRZmodes2cartesian);
 }
