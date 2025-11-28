@@ -82,12 +82,11 @@ dust.mass = 8.38e-15  # kg, for 1 micron radius silica sphere
 dust.charge = 0.0     # Initially neutral (will be charged dynamically)
 
 # Add runtime attributes for dust particles
-dust.addRealComp = dust_charge  # Charge in units of elementary charge
-dust.addRealComp = dust_radius  # Particle radius in meters
+dust.addRealAttributes = dust_charge dust_radius  # Charge (e) and radius (m)
 
 # Initialize dust attributes
-dust.attribute.dust_charge(x,y,z,t) = 0.0       # Initially neutral
-dust.attribute.dust_radius(x,y,z,t) = 1.0e-6    # 1 micron radius
+dust.attribute.dust_charge(x,y,z,ux,uy,uz,t) = 0.0       # Initially neutral
+dust.attribute.dust_radius(x,y,z,ux,uy,uz,t) = 1.0e-6    # 1 micron radius
 
 # ####################################################################################################
 # Collisions

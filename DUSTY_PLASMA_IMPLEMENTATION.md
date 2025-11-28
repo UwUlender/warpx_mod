@@ -96,9 +96,9 @@ particles.species_names = electrons ions dust
 dust.species_type = dust
 dust.mass = 8.38e-15        # 1 micron silica sphere
 dust.charge = 0.0           # initially neutral
-dust.addRealComp = dust_charge dust_radius
-dust.attribute.dust_charge(x,y,z,t) = 0.0
-dust.attribute.dust_radius(x,y,z,t) = 1.0e-6
+dust.addRealAttributes = dust_charge dust_radius
+dust.attribute.dust_charge(x,y,z,ux,uy,uz,t) = 0.0
+dust.attribute.dust_radius(x,y,z,ux,uy,uz,t) = 1.0e-6
 
 # Configure collisions
 collisions.collision_names = e_dust i_dust
