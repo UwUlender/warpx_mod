@@ -18,6 +18,8 @@
 #include "Particles/Collision/BinaryCollision/LinearBreitWheeler/LinearBreitWheelerCollisionFunc.H"
 #include "Particles/Collision/BinaryCollision/LinearCompton/LinearComptonCollisionFunc.H"
 #include "Particles/Collision/BinaryCollision/ParticleCreationFunc.H"
+#include "Particles/Collision/BinaryCollision/DustCollisions/ElectronDustCollisionFunc.H"
+#include "Particles/Collision/BinaryCollision/DustCollisions/IonDustCollisionFunc.H"
 #include "Utils/TextMsg.H"
 
 #include "Particles/ParticleCreation/SmartCopy.H"
@@ -91,6 +93,18 @@ CollisionHandler::CollisionHandler(MultiParticleContainer const * const mypc)
         else if (type == "linear_compton") {
             allcollisions[i] =
                std::make_unique<BinaryCollision<LinearComptonCollisionFunc, ParticleCreationFunc>>(
+                    collision_names[i], mypc
+               );
+        }
+        else if (type == "electrondustcollision") {
+            allcollisions[i] =
+               std::make_unique<BinaryCollision<ElectronDustCollisionFunc>>(
+                    collision_names[i], mypc
+               );
+        }
+        else if (type == "iondustcollision") {
+            allcollisions[i] =
+               std::make_unique<BinaryCollision<IonDustCollisionFunc>>(
                     collision_names[i], mypc
                );
         }
