@@ -195,20 +195,24 @@ public:
                     const amrex::ParticleReal e_uz = uz1[id1];
                     const amrex::ParticleReal e_w = w1[id1];
 
-                    // Relative velocity (normalized momentum → velocity)
-                    const amrex::ParticleReal du_x = e_ux/m1 - dust_ux/m2;
-                    const amrex::ParticleReal du_y = e_uy/m1 - dust_uy/m2;
-                    const amrex::ParticleReal du_z = e_uz/m1 - dust_uz/m2;
+                    // Relative 4-velocity (ux, uy, uz are γ*v in WarpX)
+                    const amrex::ParticleReal du_x = e_ux - dust_ux;
+                    const amrex::ParticleReal du_y = e_uy - dust_uy;
+                    const amrex::ParticleReal du_z = e_uz - dust_uz;
 
-                    // Relative speed
-                    const amrex::ParticleReal du = c * std::sqrt(du_x*du_x + du_y*du_y + du_z*du_z);
+                    const amrex::ParticleReal u2 = du_x*du_x + du_y*du_y + du_z*du_z;
 
-                    if (du < 1.0e-20_prt) continue;  // Skip if no relative motion
+                    if (u2 < 1.0e-40_prt) continue;  // Skip if no relative motion
+
+                    // For non-relativistic particles (typical in dusty plasmas): γ ≈ 1, so u ≈ v
+                    // For full relativistic treatment: v² = u² / (1 + u²/c²)
+                    // Here we use the non-relativistic approximation
+                    const amrex::ParticleReal du = std::sqrt(u2);
 
                     // Calculate enhanced cross-section due to attractive potential
                     // σ = π a² (1 + 2 e |φ_d| / (m_e v²))
                     // Note: For negative dust (φ_d < 0), electrons are attracted
-                    const amrex::ParticleReal v2 = du * du;
+                    const amrex::ParticleReal v2 = u2;  // Non-relativistic approximation
                     const amrex::ParticleReal coulomb_factor =
                         (phi_dust < 0.0_prt) ?
                         (1.0_prt + 2.0_prt * e * std::abs(phi_dust) / (m1 * v2)) :

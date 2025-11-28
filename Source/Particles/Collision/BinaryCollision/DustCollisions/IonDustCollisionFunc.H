@@ -199,20 +199,22 @@ public:
                     const amrex::ParticleReal ion_uz = uz1[id1];
                     const amrex::ParticleReal ion_w = w1[id1];
 
-                    // Relative velocity
-                    const amrex::ParticleReal du_x = ion_ux/m1 - dust_ux/m2;
-                    const amrex::ParticleReal du_y = ion_uy/m1 - dust_uy/m2;
-                    const amrex::ParticleReal du_z = ion_uz/m1 - dust_uz/m2;
+                    // Relative 4-velocity (ux, uy, uz are γ*v in WarpX)
+                    const amrex::ParticleReal du_x = ion_ux - dust_ux;
+                    const amrex::ParticleReal du_y = ion_uy - dust_uy;
+                    const amrex::ParticleReal du_z = ion_uz - dust_uz;
 
-                    // Relative speed
-                    const amrex::ParticleReal du = c * std::sqrt(du_x*du_x + du_y*du_y + du_z*du_z);
+                    const amrex::ParticleReal u2 = du_x*du_x + du_y*du_y + du_z*du_z;
 
-                    if (du < 1.0e-20_prt) continue;
+                    if (u2 < 1.0e-40_prt) continue;
+
+                    // For non-relativistic particles (typical in dusty plasmas): γ ≈ 1, so u ≈ v
+                    const amrex::ParticleReal du = std::sqrt(u2);
 
                     // Calculate collection cross-section
                     // For negative dust: σ = π a² (1 - e φ_d / (m_i v²))
                     // The negative potential reduces collection (barrier for positive ions)
-                    const amrex::ParticleReal v2 = du * du;
+                    const amrex::ParticleReal v2 = u2;  // Non-relativistic approximation
                     const amrex::ParticleReal barrier_factor =
                         (phi_dust < 0.0_prt) ?
                         std::max(0.0_prt, 1.0_prt - q1 * phi_dust / (m1 * v2)) :
