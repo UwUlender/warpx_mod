@@ -438,9 +438,18 @@ WarpXParticleContainer&
 MultiParticleContainer::GetParticleContainerFromName (const std::string& name) const
 {
     auto it = std::find(species_names.begin(), species_names.end(), name);
-    WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-        it != species_names.end(),
-        "unknown species name");
+    if (it == species_names.end()) {
+        std::string available_species = "Available species: ";
+        for (int i = 0; i < int(species_names.size()); i++) {
+            available_species += species_names[i];
+            if (i < int(species_names.size()) - 1) {
+                available_species += ", ";
+            }
+        }
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            false,
+            "Unknown species name: '" + name + "'. " + available_species);
+    }
     const auto i = static_cast<int>(std::distance(species_names.begin(), it));
     return *allcontainers[i];
 }
