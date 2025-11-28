@@ -7,6 +7,8 @@
 #include "ReactionRateFunctor.H"
 
 #include "WarpX.H"
+#include "Particles/MultiParticleContainer.H"
+#include "Particles/Collision/CollisionBase.H"
 
 #include <AMReX.H>
 #include <AMReX_MultiFab.H>
