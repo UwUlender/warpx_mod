@@ -300,6 +300,12 @@ public:
         return static_cast<int>(std::count( v.begin(), v.end(), fromMainGrid ));
     }
 
+    /**
+     * \brief Get the collision handler
+     * @return Pointer to CollisionHandler, or nullptr if no collisions are defined
+     */
+    [[nodiscard]] CollisionHandler* GetCollisionHandler() const { return collisionhandler.get(); }
+
     // Inject particles during the simulation (for particles entering the
     // simulation domain after some iterations, due to flowing plasma and/or
     // moving window).

@@ -32,7 +32,8 @@ ReactionRateFunctor::operator() (amrex::MultiFab& mf_dst, int dcomp, int /*i_buf
     auto& mypc = warpx.GetPartContainer();
 
     // Get the collision handler
-    if (!mypc.collisionhandler) {
+    CollisionHandler* collision_handler = mypc.GetCollisionHandler();
+    if (!collision_handler) {
         // No collisions defined, fill with zeros
         mf_dst.setVal(0.0, dcomp, nComp(), 0);
         return;
@@ -40,14 +41,14 @@ ReactionRateFunctor::operator() (amrex::MultiFab& mf_dst, int dcomp, int /*i_buf
 
     // Create a temporary MultiFab with the simulation grid structure at this level
     // We'll accumulate reaction rates here, then interpolate to the diagnostic grid
-    const amrex::BoxArray& ba = mypc.ParticleBoxArray(m_lev);
-    const amrex::DistributionMapping& dm = mypc.ParticleDistributionMap(m_lev);
+    const amrex::BoxArray& ba = warpx.boxArray(m_lev);
+    const amrex::DistributionMapping& dm = warpx.DistributionMap(m_lev);
     std::unique_ptr<amrex::MultiFab> rates_tmp = std::make_unique<amrex::MultiFab>(ba, dm, 1, 0);
     rates_tmp->setVal(0.0);
 
     if (!m_collision_name.empty()) {
         // Output rates for a specific collision
-        CollisionBase* collision = mypc.collisionhandler->getCollisionByName(m_collision_name);
+        CollisionBase* collision = collision_handler->getCollisionByName(m_collision_name);
         if (!collision) {
             // Collision not found, interpolate zeros
             InterpolateMFForDiag(mf_dst, *rates_tmp, dcomp, dm, m_convertRZmodes2cartesian);
@@ -75,7 +76,7 @@ ReactionRateFunctor::operator() (amrex::MultiFab& mf_dst, int dcomp, int /*i_buf
         }
     } else {
         // Sum rates from all collisions
-        const auto& all_collisions = mypc.collisionhandler->getAllCollisions();
+        const auto& all_collisions = collision_handler->getAllCollisions();
 
         for (const auto& collision : all_collisions) {
             amrex::MultiFab* rates_mf = collision->getReactionRatesAtLevel(m_lev);
