@@ -20,6 +20,7 @@
 #include "Particles/Collision/BinaryCollision/ParticleCreationFunc.H"
 #include "Particles/Collision/BinaryCollision/DustCollisions/ElectronDustCollisionFunc.H"
 #include "Particles/Collision/BinaryCollision/DustCollisions/IonDustCollisionFunc.H"
+#include "Particles/Collision/BackgroundNeutralDrag/BackgroundNeutralDrag.H"
 #include "Utils/TextMsg.H"
 
 #include "Particles/ParticleCreation/SmartCopy.H"
@@ -107,6 +108,9 @@ CollisionHandler::CollisionHandler(MultiParticleContainer const * const mypc)
                std::make_unique<BinaryCollision<IonDustCollisionFunc>>(
                     collision_names[i], mypc
                );
+        }
+        else if (type == "background_neutral_drag") {
+            allcollisions[i] = std::make_unique<BackgroundNeutralDrag>(collision_names[i]);
         }
         else{
             WARPX_ABORT_WITH_MESSAGE("Unknown collision type.");

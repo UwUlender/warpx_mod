@@ -347,6 +347,10 @@ PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int isp
         utils::parser::getWithParser(pp_species_boundary,"u_th",boundary_uth);
         m_boundary_conditions.SetThermalVelocity(boundary_uth);
     }
+
+    // Read gravity (default 0)
+    m_gravity.resize(3, 0.0);
+    utils::parser::queryArrWithParser(pp_species_name, "forces.gravity", m_gravity);
 }
 
 void
@@ -1178,6 +1182,11 @@ PhysicalParticleContainer::PushP (int lev, Real dt,
             // Loop over the particles and update their momentum
             const amrex::ParticleReal q = this->charge;
             const amrex::ParticleReal mass = this->m_mass;
+            const amrex::ParticleReal dt_grav = dt;
+            const amrex::ParticleReal gx = m_gravity[0];
+            const amrex::ParticleReal gy = m_gravity[1];
+            const amrex::ParticleReal gz = m_gravity[2];
+            const bool has_gravity = (gx != 0.0) || (gy != 0.0) || (gz != 0.0);
 
             const auto pusher_algo = WarpX::particle_pusher_algo;
             const auto do_crr = do_classical_radiation_reaction;
@@ -1247,6 +1256,12 @@ PhysicalParticleContainer::PushP (int lev, Real dt,
                                                Byp, Bzp, qp, mass, dt);
                 } else {
                     amrex::Abort("Unknown particle pusher");
+                }
+                
+                if (has_gravity) {
+                    ux[ip] += gx * dt_grav;
+                    uy[ip] += gy * dt_grav;
+                    uz[ip] += gz * dt_grav;
                 }
             });
         }
@@ -1380,6 +1395,11 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
     // local copies for device lambda capture
     const amrex::ParticleReal q = this->charge;
     const amrex::ParticleReal mass = this->m_mass;
+    const amrex::ParticleReal dt_grav = dt;
+    const amrex::ParticleReal gx = m_gravity[0];
+    const amrex::ParticleReal gy = m_gravity[1];
+    const amrex::ParticleReal gz = m_gravity[2];
+    const bool has_gravity = (gx != 0.0) || (gy != 0.0) || (gz != 0.0);
 
     const auto pusher_algo = WarpX::particle_pusher_algo;
     const auto do_crr = do_classical_radiation_reaction;
@@ -1489,6 +1509,12 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
                                       dt);
         }
 #endif
+
+        if (has_gravity && momentum_push_type != MomentumPushType::None) {
+            ux[ip] += gx * dt_grav;
+            uy[ip] += gy * dt_grav;
+            uz[ip] += gz * dt_grav;
+        }
 
         amrex::Real position_dt = dt;
         if (position_push_type == PositionPushType::FirstHalf || position_push_type == PositionPushType::SecondHalf) {

@@ -94,6 +94,12 @@ public:
         utils::parser::queryWithParser(
             pp_collision_name, "enable_coulomb_scattering", enable_coulomb_scattering);
         m_exe.m_enable_coulomb_scattering = enable_coulomb_scattering;
+
+        // Coulomb Logarithm
+        amrex::ParticleReal coulomb_log = 10.0;
+        utils::parser::queryWithParser(
+            pp_collision_name, "coulomb_log", coulomb_log);
+        m_exe.m_coulomb_log = coulomb_log;
     }
 
     struct Executor {
@@ -261,7 +267,9 @@ public:
                                 std::abs(Q_dust_coulomb) / (4.0_prt * MathConst::pi * epsilon_0 * m1 * v2);
 
                             // Coulomb cross-section (approximate)
-                            const amrex::ParticleReal sigma_coulomb = MathConst::pi * b_90 * b_90;
+                            // sigma_mt = 4 * pi * b_90^2 * ln_Lambda
+                            const amrex::ParticleReal sigma_coulomb = 
+                                4.0_prt * MathConst::pi * b_90 * b_90 * m_coulomb_log;
 
                             // Scattering probability
                             const amrex::ParticleReal prob_scatter =
@@ -275,7 +283,8 @@ public:
                                 if (m_enable_momentum_transfer)
                                 {
                                     // Coulomb drag: transfer fraction of momentum
-                                    const amrex::ParticleReal drag_factor = 0.1_prt;  // Tunable parameter
+                                    // Since we used sigma_mt, this represents a significant momentum loss event
+                                    const amrex::ParticleReal drag_factor = 1.0_prt;
                                     const amrex::ParticleReal mom_ratio = ion_w / dust_w * drag_factor;
 
                                     ux2[id2] += (ion_ux - dust_ux * (m2/m1)) * mom_ratio;
@@ -297,6 +306,7 @@ public:
         amrex::ParticleReal m_dust_radius;
         amrex::ParticleReal m_dust_density;
         amrex::ParticleReal m_collection_efficiency = 0.5;
+        amrex::ParticleReal m_coulomb_log = 10.0;
         bool m_enable_charging = true;
         bool m_enable_momentum_transfer = true;
         bool m_enable_coulomb_scattering = true;
