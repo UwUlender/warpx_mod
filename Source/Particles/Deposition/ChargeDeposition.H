@@ -43,7 +43,8 @@ void doChargeDepositionShapeN (const GetParticlePosition<PIdx>& GetPosition,
                                const amrex::XDim3 & xyzmin,
                                amrex::Dim3 lo,
                                amrex::Real q,
-                               [[maybe_unused]] int n_rz_azimuthal_modes)
+                               [[maybe_unused]] int n_rz_azimuthal_modes,
+                               const amrex::ParticleReal* const var_charge = nullptr)
 {
     using namespace amrex;
 
@@ -65,6 +66,9 @@ void doChargeDepositionShapeN (const GetParticlePosition<PIdx>& GetPosition,
             [=] AMREX_GPU_DEVICE (long ip) {
             // --- Get particle quantities
             amrex::Real wq = q*wp[ip]*invvol;
+            if (var_charge) {
+                wq = var_charge[ip] * PhysConst::q_e * wp[ip] * invvol;
+            }
             if (do_ionization){
                 wq *= ion_lev[ip];
             }
@@ -208,7 +212,8 @@ void doChargeDepositionSharedShapeN (const GetParticlePosition<PIdx>& GetPositio
                                      const amrex::Box& box,
                                      const amrex::Geometry& geom,
                                      const amrex::IntVect& a_tbox_max_size,
-                                     const amrex::IntVect bin_size
+                                     const amrex::IntVect bin_size,
+                                     const amrex::ParticleReal* const var_charge = nullptr
                                      )
 {
     using namespace amrex;
@@ -322,6 +327,9 @@ void doChargeDepositionSharedShapeN (const GetParticlePosition<PIdx>& GetPositio
 
             // --- Get particle quantities
             amrex::Real wq = q*wp[ip]*invvol;
+            if (var_charge) {
+                wq = var_charge[ip] * PhysConst::q_e * wp[ip] * invvol;
+            }
             if (do_ionization){
                 wq *= ion_lev[ip];
             }

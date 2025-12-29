@@ -180,19 +180,19 @@ deposit_charge (typename T_PC::ParIterType& pti,
     if        (nox == 1){
         doChargeDepositionShapeN<1>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                     rho_fab, np_to_deposit.value(), dinv, xyzmin, lo, charge,
-                                    n_rz_azimuthal_modes);
+                                    n_rz_azimuthal_modes, var_charge);
     } else if (nox == 2){
         doChargeDepositionShapeN<2>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                     rho_fab, np_to_deposit.value(), dinv, xyzmin, lo, charge,
-                                    n_rz_azimuthal_modes);
+                                    n_rz_azimuthal_modes, var_charge);
     } else if (nox == 3){
         doChargeDepositionShapeN<3>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                     rho_fab, np_to_deposit.value(), dinv, xyzmin, lo, charge,
-                                    n_rz_azimuthal_modes);
+                                    n_rz_azimuthal_modes, var_charge);
     } else if (nox == 4){
         doChargeDepositionShapeN<4>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                     rho_fab, np_to_deposit.value(), dinv, xyzmin, lo, charge,
-                                    n_rz_azimuthal_modes);
+                                    n_rz_azimuthal_modes, var_charge);
     }
     ABLASTR_PROFILE_VAR_STOP(blp_ppc_chd);
 
