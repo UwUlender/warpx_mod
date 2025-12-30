@@ -44,6 +44,7 @@ namespace ablastr::particles
  * \param np_to_deposit number of particles to deposit (default: pti.numParticles())
  * \param icomp component in MultiFab to start depositing to
  * \param nc number of components to deposit
+ * \param var_charge pointer to array of variable charges for each macroparticle (default: nullptr)
  */
 template< typename T_PC >
 void
@@ -62,7 +63,8 @@ deposit_charge (typename T_PC::ParIterType& pti,
                 std::optional<amrex::IntVect> rel_ref_ratio = std::nullopt,
                 long const offset = 0,
                 std::optional<long> np_to_deposit = std::nullopt,
-                int const icomp = 0, int const nc = 1)
+                int const icomp = 0, int const nc = 1,
+                const amrex::ParticleReal* const var_charge = nullptr)
 {
     // deposition guards
     amrex::IntVect ng_rho = rho->nGrowVect();
