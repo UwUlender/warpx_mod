@@ -93,7 +93,8 @@ public:
                                 const long /*np_to_deposit*/,
                                 int /*thread_num*/,
                                 int /*lev*/,
-                                int /*depos_lev*/) override {}
+                                int /*depos_lev*/,
+                                const amrex::ParticleReal* const /*var_charge*/) override {}
 
     // DepositCurrent should do nothing for photons
     void DepositCurrent (WarpXParIter& /*pti*/,
@@ -112,7 +113,8 @@ public:
                                  int const /*depos_lev*/,
                                  amrex::Real const /*dt*/,
                                  amrex::Real const /*relative_time*/,
-                                 PushType /*push_type*/) override {}
+                                 PushType /*push_type*/,
+                                 const amrex::ParticleReal* const /*var_charge*/) override {}
 };
 
 #endif // #ifndef WARPX_PhotonParticleContainer_H_
