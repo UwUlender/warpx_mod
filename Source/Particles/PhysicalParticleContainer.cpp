@@ -347,6 +347,10 @@ PhysicalParticleContainer::PhysicalParticleContainer (AmrCore* amr_core, int isp
         utils::parser::getWithParser(pp_species_boundary,"u_th",boundary_uth);
         m_boundary_conditions.SetThermalVelocity(boundary_uth);
     }
+
+    // Read gravity (default 0)
+    m_gravity.resize(3, 0.0);
+    utils::parser::queryArrWithParser(pp_species_name, "forces.gravity", m_gravity);
 }
 
 void
@@ -1171,9 +1175,18 @@ PhysicalParticleContainer::PushP (int lev, Real dt,
                 ion_lev = pti.GetiAttribs("ionizationLevel").dataPtr();
             }
 
+            const auto& rnames = GetRealSoANames();
+            const bool has_dust_charge = std::find(rnames.begin(), rnames.end(), "dust_charge") != rnames.end();
+            const ParticleReal* const AMREX_RESTRICT dust_charge = (has_dust_charge) ? pti.GetAttribs("dust_charge").dataPtr() : nullptr;
+
             // Loop over the particles and update their momentum
             const amrex::ParticleReal q = this->charge;
             const amrex::ParticleReal mass = this->m_mass;
+            const amrex::ParticleReal dt_grav = dt;
+            const amrex::ParticleReal gx = m_gravity[0];
+            const amrex::ParticleReal gy = m_gravity[1];
+            const amrex::ParticleReal gz = m_gravity[2];
+            const bool has_gravity = (gx != 0.0) || (gy != 0.0) || (gz != 0.0);
 
             const auto pusher_algo = WarpX::particle_pusher_algo;
             const auto do_crr = do_classical_radiation_reaction;
@@ -1215,30 +1228,40 @@ PhysicalParticleContainer::PushP (int lev, Real dt,
 
                 if (do_crr) {
                     amrex::ParticleReal qp = q;
+                    if (dust_charge) { qp = dust_charge[ip] * PhysConst::q_e; }
                     if (ion_lev) { qp *= ion_lev[ip]; }
                     UpdateMomentumBorisWithRadiationReaction(ux[ip], uy[ip], uz[ip],
                                                              Exp, Eyp, Ezp, Bxp,
                                                              Byp, Bzp, qp, mass, dt);
                 } else if (pusher_algo == ParticlePusherAlgo::Boris) {
                     amrex::ParticleReal qp = q;
+                    if (dust_charge) { qp = dust_charge[ip] * PhysConst::q_e; }
                     if (ion_lev) { qp *= ion_lev[ip]; }
                     UpdateMomentumBoris( ux[ip], uy[ip], uz[ip],
                                          Exp, Eyp, Ezp, Bxp,
                                          Byp, Bzp, qp, mass, dt);
                 } else if (pusher_algo == ParticlePusherAlgo::Vay) {
                     amrex::ParticleReal qp = q;
+                    if (dust_charge) { qp = dust_charge[ip] * PhysConst::q_e; }
                     if (ion_lev){ qp *= ion_lev[ip]; }
                     UpdateMomentumVay( ux[ip], uy[ip], uz[ip],
                                        Exp, Eyp, Ezp, Bxp,
                                        Byp, Bzp, qp, mass, dt);
                 } else if (pusher_algo == ParticlePusherAlgo::HigueraCary) {
                     amrex::ParticleReal qp = q;
+                    if (dust_charge) { qp = dust_charge[ip] * PhysConst::q_e; }
                     if (ion_lev){ qp *= ion_lev[ip]; }
                     UpdateMomentumHigueraCary( ux[ip], uy[ip], uz[ip],
                                                Exp, Eyp, Ezp, Bxp,
                                                Byp, Bzp, qp, mass, dt);
                 } else {
                     amrex::Abort("Unknown particle pusher");
+                }
+                
+                if (has_gravity) {
+                    ux[ip] += gx * dt_grav;
+                    uy[ip] += gy * dt_grav;
+                    uz[ip] += gz * dt_grav;
                 }
             });
         }
@@ -1348,6 +1371,10 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
         ion_lev = pti.GetiAttribs("ionizationLevel").dataPtr() + offset;
     }
 
+    const auto& rnames = GetRealSoANames();
+    const bool has_dust_charge = std::find(rnames.begin(), rnames.end(), "dust_charge") != rnames.end();
+    const ParticleReal* const AMREX_RESTRICT dust_charge = (has_dust_charge) ? pti.GetAttribs("dust_charge").dataPtr() + offset : nullptr;
+
     const bool save_previous_position = m_save_previous_position;
     ParticleReal* x_old = nullptr;
     ParticleReal* y_old = nullptr;
@@ -1368,6 +1395,11 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
     // local copies for device lambda capture
     const amrex::ParticleReal q = this->charge;
     const amrex::ParticleReal mass = this->m_mass;
+    const amrex::ParticleReal dt_grav = dt;
+    const amrex::ParticleReal gx = m_gravity[0];
+    const amrex::ParticleReal gy = m_gravity[1];
+    const amrex::ParticleReal gz = m_gravity[2];
+    const bool has_gravity = (gx != 0.0) || (gy != 0.0) || (gz != 0.0);
 
     const auto pusher_algo = WarpX::particle_pusher_algo;
     const auto do_crr = do_classical_radiation_reaction;
@@ -1454,7 +1486,7 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
                 doParticleMomentumPush<0>(ux[ip], uy[ip], uz[ip],
                                           Exp, Eyp, Ezp, Bxp, Byp, Bzp,
                                           ion_lev ? ion_lev[ip] : 1,
-                                          mass, q, pusher_algo, do_crr,
+                                          mass, (dust_charge ? dust_charge[ip] * PhysConst::q_e : q), pusher_algo, do_crr,
                                           t_chi_max,
                                           dt);
             } else {
@@ -1462,7 +1494,7 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
                     doParticleMomentumPush<1>(ux[ip], uy[ip], uz[ip],
                                               Exp, Eyp, Ezp, Bxp, Byp, Bzp,
                                               ion_lev ? ion_lev[ip] : 1,
-                                              mass, q, pusher_algo, do_crr,
+                                              mass, (dust_charge ? dust_charge[ip] * PhysConst::q_e : q), pusher_algo, do_crr,
                                               t_chi_max,
                                               dt);
                 }
@@ -1477,6 +1509,12 @@ PhysicalParticleContainer::PushPX (WarpXParIter& pti,
                                       dt);
         }
 #endif
+
+        if (has_gravity && momentum_push_type != MomentumPushType::None) {
+            ux[ip] += gx * dt_grav;
+            uy[ip] += gy * dt_grav;
+            uz[ip] += gz * dt_grav;
+        }
 
         amrex::Real position_dt = dt;
         if (position_push_type == PositionPushType::FirstHalf || position_push_type == PositionPushType::SecondHalf) {

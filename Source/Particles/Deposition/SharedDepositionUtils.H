@@ -81,7 +81,8 @@ void depositComponent (const GetParticlePosition<PIdx>& GetPosition,
                        const amrex::Real q,
                        const int n_rz_azimuthal_modes,
                        const unsigned int ip,
-                       const int zdir, const int NODE, const int CELL, const int dir)
+                       const int zdir, const int NODE, const int CELL, const int dir,
+                       const amrex::ParticleReal* const var_charge = nullptr)
 {
     using namespace amrex::literals;
 
@@ -102,6 +103,9 @@ void depositComponent (const GetParticlePosition<PIdx>& GetPosition,
                                                 + uyp[ip]*uyp[ip]*clightsq
                                                 + uzp[ip]*uzp[ip]*clightsq);
     amrex::Real wq  = q*wp[ip];
+    if (var_charge) {
+        wq = var_charge[ip] * PhysConst::q_e * wp[ip];
+    }
     if (do_ionization){
         wq *= ion_lev[ip];
     }

@@ -512,6 +512,9 @@ protected:
     /* Vector of user-defined parser for initializing user-defined real attributes */
     amrex::Vector< std::unique_ptr<amrex::Parser> > m_user_real_attrib_parser;
 
+    // Gravity vector (in m/s^2)
+    amrex::Vector<amrex::ParticleReal> m_gravity;
+
 };
 
 #endif

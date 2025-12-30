@@ -313,7 +313,8 @@ public:
                                long np_to_deposit,
                                int thread_num,
                                int lev,
-                               int depos_lev);
+                               int depos_lev,
+                               const amrex::ParticleReal* const var_charge = nullptr);
 
     virtual void DepositCurrent (WarpXParIter& pti,
                                 RealVector const & wp,
@@ -331,7 +332,8 @@ public:
                                 int depos_lev,
                                 amrex::Real dt,
                                 amrex::Real relative_time,
-                                PushType push_type);
+                                PushType push_type,
+                                const amrex::ParticleReal* const var_charge = nullptr);
     /**
      * \brief Accumulate velocity moments for matched temperature deposition using particle shapes
      *
@@ -394,14 +396,15 @@ public:
                                          amrex::MultiFab* Szy,
                                          amrex::MultiFab* Szz,
                                    const amrex::FArrayBox* bxfab,
-                                   const amrex::FArrayBox* byfab,
-                                   const amrex::FArrayBox* bzfab,
-                                         long offset,
-                                         long np_to_deposit,
-                                         int thread_num,
-                                         int lev,
-                                         int depos_lev,
-                                         amrex::Real dt );
+                                  const amrex::FArrayBox* byfab,
+                                  const amrex::FArrayBox* bzfab,
+                                        long offset,
+                                        long np_to_deposit,
+                                        int thread_num,
+                                        int lev,
+                                        int depos_lev,
+                                        amrex::Real dt,
+                                        const amrex::ParticleReal* const var_charge = nullptr);
 
     // If particles start outside of the domain, ContinuousInjection
     // makes sure that they are initialized when they enter the domain, and

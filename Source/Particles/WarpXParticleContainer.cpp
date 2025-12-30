@@ -395,7 +395,8 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                                         amrex::MultiFab * const jx, amrex::MultiFab * const jy, amrex::MultiFab * const jz,
                                         long const offset, long const np_to_deposit,
                                         int const thread_num, const int lev, int const depos_lev,
-                                        amrex::Real const dt, amrex::Real const relative_time, PushType push_type)
+                                        amrex::Real const dt, amrex::Real const relative_time, PushType push_type,
+                                        const amrex::ParticleReal* const var_charge)
 {
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE((depos_lev==(lev-1)) ||
                                      (depos_lev==(lev  )),
@@ -622,28 +623,28 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
                         xyzmin, lo, q, WarpX::n_rz_azimuthal_modes,
-                        bins, box, geom, max_tbox_size, threads_per_block, bin_size);
+                        bins, box, geom, max_tbox_size, threads_per_block, bin_size, var_charge);
             } else if (WarpX::nox == 2){
                 doDepositionSharedShapeN<2>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
                         xyzmin, lo, q, WarpX::n_rz_azimuthal_modes,
-                        bins, box, geom, max_tbox_size, threads_per_block, bin_size);
+                        bins, box, geom, max_tbox_size, threads_per_block, bin_size, var_charge);
             } else if (WarpX::nox == 3){
                 doDepositionSharedShapeN<3>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
                         xyzmin, lo, q, WarpX::n_rz_azimuthal_modes,
-                        bins, box, geom, max_tbox_size, threads_per_block, bin_size);
+                        bins, box, geom, max_tbox_size, threads_per_block, bin_size, var_charge);
             } else if (WarpX::nox == 4){
                 doDepositionSharedShapeN<4>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
                         xyzmin, lo, q, WarpX::n_rz_azimuthal_modes,
-                        bins, box, geom, max_tbox_size, threads_per_block, bin_size);
+                        bins, box, geom, max_tbox_size, threads_per_block, bin_size, var_charge);
             }
             WARPX_PROFILE_VAR_STOP(direct_current_dep_kernel);
         }
@@ -665,7 +666,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         jx_arr, jy_arr, jz_arr,
                         np_to_deposit, dt, relative_time, dinv, xyzmin, lo, q,
                         WarpX::n_rz_azimuthal_modes,
-                        eb_reduce_particle_shape, EB::enabled() );
+                        eb_reduce_particle_shape, EB::enabled(), var_charge );
                 } else if (WarpX::nox == 2){
                     doEsirkepovDepositionShapeN<2>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
@@ -673,7 +674,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         jx_arr, jy_arr, jz_arr,
                         np_to_deposit, dt, relative_time, dinv, xyzmin, lo, q,
                         WarpX::n_rz_azimuthal_modes,
-                        eb_reduce_particle_shape, EB::enabled() );
+                        eb_reduce_particle_shape, EB::enabled(), var_charge );
                 } else if (WarpX::nox == 3){
                     doEsirkepovDepositionShapeN<3>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
@@ -681,7 +682,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         jx_arr, jy_arr, jz_arr,
                         np_to_deposit, dt, relative_time, dinv, xyzmin, lo, q,
                         WarpX::n_rz_azimuthal_modes,
-                        eb_reduce_particle_shape, EB::enabled() );
+                        eb_reduce_particle_shape, EB::enabled(), var_charge );
                 } else if (WarpX::nox == 4){
                     doEsirkepovDepositionShapeN<4>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
@@ -689,7 +690,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         jx_arr, jy_arr, jz_arr,
                         np_to_deposit, dt, relative_time, dinv, xyzmin, lo, q,
                         WarpX::n_rz_azimuthal_modes,
-                        eb_reduce_particle_shape, EB::enabled() );
+                        eb_reduce_particle_shape, EB::enabled(), var_charge );
                 }
 
             } else if (push_type == PushType::Implicit) {
@@ -721,7 +722,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 2){
                     doChargeConservingDepositionShapeNImplicit<2>(
                         xp_n_data, yp_n_data, zp_n_data,
@@ -729,7 +730,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 3){
                     doChargeConservingDepositionShapeNImplicit<3>(
                         xp_n_data, yp_n_data, zp_n_data,
@@ -737,7 +738,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 4){
                     doChargeConservingDepositionShapeNImplicit<4>(
                         xp_n_data, yp_n_data, zp_n_data,
@@ -745,7 +746,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 }
             }
         } else if (WarpX::current_deposition_algo == CurrentDepositionAlgo::Villasenor) {
@@ -778,7 +779,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 2){
                     doVillasenorDepositionShapeNImplicit<2>(
                         xp_n_data, yp_n_data, zp_n_data,
@@ -786,7 +787,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 3){
                     doVillasenorDepositionShapeNImplicit<3>(
                         xp_n_data, yp_n_data, zp_n_data,
@@ -794,7 +795,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 4){
                     doVillasenorDepositionShapeNImplicit<4>(
                         xp_n_data, yp_n_data, zp_n_data,
@@ -802,7 +803,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp_n.dataPtr() + offset, uyp_n.dataPtr() + offset, uzp_n.dataPtr() + offset,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_arr, jy_arr, jz_arr, np_to_deposit, dt, dinv, xyzmin, domain_double, do_cropping, lo, q,
-                        WarpX::n_rz_azimuthal_modes);
+                        WarpX::n_rz_azimuthal_modes, var_charge);
                 }
             }
             else {
@@ -868,25 +869,25 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 2){
                     doDepositionShapeN<2>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 3){
                     doDepositionShapeN<3>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 4){
                     doDepositionShapeN<4>(
                         GetPosition, wp.dataPtr() + offset, uxp.dataPtr() + offset,
                         uyp.dataPtr() + offset, uzp.dataPtr() + offset, ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, relative_time, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 }
             } else if (push_type == PushType::Implicit) {
                 auto& uxp_n = pti.GetAttribs("ux_n");
@@ -899,7 +900,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset,
                         ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 2){
                     doDepositionShapeNImplicit<2>(
                         GetPosition, wp.dataPtr() + offset,
@@ -907,7 +908,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset,
                         ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 3){
                     doDepositionShapeNImplicit<3>(
                         GetPosition, wp.dataPtr() + offset,
@@ -915,7 +916,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset,
                         ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 } else if (WarpX::nox == 4){
                     doDepositionShapeNImplicit<4>(
                         GetPosition, wp.dataPtr() + offset,
@@ -923,7 +924,7 @@ WarpXParticleContainer::DepositCurrent (WarpXParIter& pti,
                         uxp.dataPtr() + offset, uyp.dataPtr() + offset, uzp.dataPtr() + offset,
                         ion_lev,
                         jx_fab, jy_fab, jz_fab, np_to_deposit, dinv,
-                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes);
+                        xyzmin, lo, q, WarpX::n_rz_azimuthal_modes, var_charge);
                 }
             }
         }
@@ -1411,9 +1412,16 @@ WarpXParticleContainer::DepositCurrent (
                 ion_lev = pti.GetiAttribs("ionizationLevel").dataPtr();
             }
 
+            const auto& rnames = GetRealSoANames();
+            const bool has_dust_charge = std::find(rnames.begin(), rnames.end(), "dust_charge") != rnames.end();
+            const amrex::ParticleReal* AMREX_RESTRICT var_charge = nullptr;
+            if (has_dust_charge) {
+                 var_charge = pti.GetAttribs("dust_charge").dataPtr();
+            }
+
             DepositCurrent(pti, wp, uxp, uyp, uzp, ion_lev,
                            J[lev][0], J[lev][1], J[lev][2],
-                           0, np, thread_num, lev, lev, dt, relative_time, PushType::Explicit);
+                           0, np, thread_num, lev, lev, dt, relative_time, PushType::Explicit, var_charge);
         }
 #ifdef AMREX_USE_OMP
         }
@@ -1444,7 +1452,8 @@ WarpXParticleContainer::DepositCharge (WarpXParIter& pti, RealVector const& wp,
                                        const int * const ion_lev,
                                        amrex::MultiFab* rho, const int icomp,
                                        const long offset, const long np_to_deposit,
-                                       const int thread_num, const int lev, const int depos_lev)
+                                       const int thread_num, const int lev, const int depos_lev,
+                                       const amrex::ParticleReal* const var_charge)
 {
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
         rho->nComp() >= icomp - 1,
@@ -1656,25 +1665,25 @@ WarpXParticleContainer::DepositCharge (WarpXParIter& pti, RealVector const& wp,
                                               rho_fab, ix_type, np_to_deposit, dinv, xyzmin, lo, q,
                                               WarpX::n_rz_azimuthal_modes,
                                               bins, box, geom, max_tbox_size,
-                                              WarpX::shared_tilesize);
+                                              WarpX::shared_tilesize, var_charge);
         } else if (WarpX::nox == 2){
             doChargeDepositionSharedShapeN<2>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                               rho_fab, ix_type, np_to_deposit, dinv, xyzmin, lo, q,
                                               WarpX::n_rz_azimuthal_modes,
                                               bins, box, geom, max_tbox_size,
-                                              WarpX::shared_tilesize);
+                                              WarpX::shared_tilesize, var_charge);
         } else if (WarpX::nox == 3){
             doChargeDepositionSharedShapeN<3>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                               rho_fab, ix_type, np_to_deposit, dinv, xyzmin, lo, q,
                                               WarpX::n_rz_azimuthal_modes,
                                               bins, box, geom, max_tbox_size,
-                                              WarpX::shared_tilesize);
+                                              WarpX::shared_tilesize, var_charge);
         } else if (WarpX::nox == 4){
             doChargeDepositionSharedShapeN<4>(GetPosition, wp.dataPtr()+offset, ion_lev,
                                               rho_fab, ix_type, np_to_deposit, dinv, xyzmin, lo, q,
                                               WarpX::n_rz_azimuthal_modes,
                                               bins, box, geom, max_tbox_size,
-                                              WarpX::shared_tilesize);
+                                              WarpX::shared_tilesize, var_charge);
         }
 #ifndef AMREX_USE_GPU
         // CPU, tiling: atomicAdd local_rho into rho
@@ -1726,7 +1735,7 @@ WarpXParticleContainer::DepositCharge (WarpXParIter& pti, RealVector const& wp,
                 WarpX::noz, dinv, xyzmin, WarpX::n_rz_azimuthal_modes,
                 ng_rho, depos_lev, ref_ratio,
                 offset, np_to_deposit,
-                icomp, nc);
+                icomp, nc, var_charge);
     }
 }
 
@@ -1806,7 +1815,14 @@ WarpXParticleContainer::DepositCharge (amrex::MultiFab* rho,
             ion_lev = pti.GetiAttribs("ionizationLevel").dataPtr();
         }
 
-        DepositCharge(pti, wp, ion_lev, rho, icomp, 0, np, thread_num, lev, lev);
+        const auto& rnames = GetRealSoANames();
+        const bool has_dust_charge = std::find(rnames.begin(), rnames.end(), "dust_charge") != rnames.end();
+        const amrex::ParticleReal* AMREX_RESTRICT var_charge = nullptr;
+        if (has_dust_charge) {
+             var_charge = pti.GetAttribs("dust_charge").dataPtr();
+        }
+
+        DepositCharge(pti, wp, ion_lev, rho, icomp, 0, np, thread_num, lev, lev, var_charge);
     }
 #ifdef AMREX_USE_OMP
     }
