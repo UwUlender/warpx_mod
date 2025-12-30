@@ -967,7 +967,7 @@ WarpXParticleContainer::DepositCurrentAndMassMatrices ( WarpXParIter& pti, const
                                         amrex::MultiFab* Szx, amrex::MultiFab* Szy, amrex::MultiFab* Szz,
                                         const amrex::FArrayBox* Bx, const amrex::FArrayBox* By, const amrex::FArrayBox* Bz,
                                         long offset, long np_to_deposit, int thread_num, int lev, int depos_lev,
-                                        amrex::Real dt, const amrex::ParticleReal* const var_charge )
+                                        amrex::Real dt, [[maybe_unused]] const amrex::ParticleReal* const var_charge )
 {
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE((depos_lev==(lev-1)) ||
                                      (depos_lev==(lev  )),

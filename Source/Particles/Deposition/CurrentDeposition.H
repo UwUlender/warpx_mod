@@ -504,7 +504,7 @@ void doDepositionSharedShapeN (const GetParticlePosition<PIdx>& GetPosition,
                                const amrex::IntVect& a_tbox_max_size,
                                const int threads_per_block,
                                const amrex::IntVect bin_size,
-                               const amrex::ParticleReal* const var_charge = nullptr)
+                               [[maybe_unused]] const amrex::ParticleReal* const var_charge = nullptr)
 {
     using namespace amrex::literals;
 
