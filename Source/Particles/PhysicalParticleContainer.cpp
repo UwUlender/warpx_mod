@@ -688,6 +688,13 @@ PhysicalParticleContainer::Evolve (ablastr::fields::MultiFabRegister& fields,
                     const int* const AMREX_RESTRICT ion_lev = (do_field_ionization)?
                         pti.GetiAttribs("ionizationLevel").dataPtr():nullptr;
 
+                    const auto& rnames = GetRealSoANames();
+                    const bool has_dust_charge = std::find(rnames.begin(), rnames.end(), "dust_charge") != rnames.end();
+                    const amrex::ParticleReal* AMREX_RESTRICT var_charge = nullptr;
+                    if (has_dust_charge) {
+                        var_charge = pti.GetAttribs("dust_charge").dataPtr();
+                    }
+
                     // Deposit inside domains
                     if (implicit_options && implicit_options->deposit_mass_matrices) {
                         // Note that J for particles included in MM are deposited to current_fp_MM
@@ -705,7 +712,7 @@ PhysicalParticleContainer::Evolve (ablastr::fields::MultiFabRegister& fields,
                         amrex::MultiFab * Szz = fields.get(FieldType::MassMatrices_Z, Direction{2}, lev);
                         DepositCurrentAndMassMatrices(pti, wp, uxp, uyp, uzp, jx, jy, jz,
                                        Sxx, Sxy, Sxz, Syx, Syy, Syz, Szx, Szy, Szz,
-                                       bxfab, byfab, bzfab, 0, np_to_deposit, thread_num, lev, lev, dt);
+                                       bxfab, byfab, bzfab, 0, np_to_deposit, thread_num, lev, lev, dt, var_charge);
                     }
                     else {
                         amrex::MultiFab * jx = fields.get(current_fp_string, Direction{0}, lev);
