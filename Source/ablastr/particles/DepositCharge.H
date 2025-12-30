@@ -62,7 +62,8 @@ deposit_charge (typename T_PC::ParIterType& pti,
                 std::optional<amrex::IntVect> rel_ref_ratio = std::nullopt,
                 long const offset = 0,
                 std::optional<long> np_to_deposit = std::nullopt,
-                int const icomp = 0, int const nc = 1)
+                int const icomp = 0, int const nc = 1,
+                const amrex::ParticleReal* const var_charge = nullptr)
 {
     // deposition guards
     amrex::IntVect ng_rho = rho->nGrowVect();
