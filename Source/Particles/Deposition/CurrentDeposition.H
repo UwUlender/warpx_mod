@@ -649,7 +649,7 @@ void doDepositionSharedShapeN (const GetParticlePosition<PIdx>& GetPosition,
         GetPosition, wp, uxp, uyp, uzp, ion_lev, jx_fab, jy_fab, jz_fab,
         np_to_deposit, relative_time, dinv, xyzmin, lo, q,
         n_rz_azimuthal_modes, a_bins, box, geom, a_tbox_max_size,
-        threads_per_block, bin_size);
+        threads_per_block, bin_size, var_charge);
     WARPX_ABORT_WITH_MESSAGE("Shared memory only implemented for HIP/CUDA");
 #endif
 }

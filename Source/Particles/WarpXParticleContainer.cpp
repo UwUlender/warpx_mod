@@ -969,6 +969,7 @@ WarpXParticleContainer::DepositCurrentAndMassMatrices ( WarpXParIter& pti, const
                                         long offset, long np_to_deposit, int thread_num, int lev, int depos_lev,
                                         amrex::Real dt, const amrex::ParticleReal* const var_charge )
 {
+    amrex::ignore_unused(var_charge);
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE((depos_lev==(lev-1)) ||
                                      (depos_lev==(lev  )),
                                      "Deposition buffers only work for lev-1");
